@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 
 export default function SefEvaluationModal({ isOpen, evaluation, submitUrl = '/evaluations', csrfToken = '', onClose, onSubmitted }) {
     const [ratings, setRatings] = useState({});
@@ -7,6 +7,7 @@ export default function SefEvaluationModal({ isOpen, evaluation, submitUrl = '/e
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState('');
     const [submitSuccess, setSubmitSuccess] = useState('');
+    const benchmarkSectionRef = useRef(null);
 
     const ratingScale = useMemo(() => ([
         {
@@ -145,10 +146,16 @@ export default function SefEvaluationModal({ isOpen, evaluation, submitUrl = '/e
 
     const handleNext = () => {
         setCurrentStep((prev) => Math.min(prev + 1, 4));
+        requestAnimationFrame(() => {
+            benchmarkSectionRef.current?.scrollIntoView({ block: 'start' });
+        });
     };
 
     const handlePrevious = () => {
         setCurrentStep((prev) => Math.max(prev - 1, 1));
+        requestAnimationFrame(() => {
+            benchmarkSectionRef.current?.scrollIntoView({ block: 'start' });
+        });
     };
 
     const handleSubmit = async () => {
@@ -243,76 +250,67 @@ export default function SefEvaluationModal({ isOpen, evaluation, submitUrl = '/e
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-2 sm:p-3">
-            <div className="w-full max-w-4xl rounded-2xl border border-slate-300 bg-white shadow-2xl">
-                <div className="border-b border-slate-200 px-4 py-3 sm:px-5">
-                    <div className="flex items-center justify-between gap-4">
-                        <img src="/image/LNULogo.png" alt="LNU Logo" className="h-14 w-14 object-contain" />
-                        <div className="text-center">
-                            <p className="text-2xl font-bold tracking-wide text-slate-800">LEYTE NORMAL UNIVERSITY</p>
-                            <p className="text-xs text-slate-500">Paterno St., Tacloban City, 6500</p>
-                            <p className="mt-1 text-sm font-semibold uppercase text-slate-700">Supervisor&apos;s Evaluation of Faculty (SEF)</p>
-                        </div>
-                        <div className="h-14 w-14" />
-                    </div>
-                </div>
-
-                <div className="max-h-[66vh] space-y-3 overflow-y-auto px-4 py-3 sm:px-5">
+            <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-2xl">
+                <div className="border-b border-slate-200 px-4 py-2 sm:px-5">
                     <div className="flex items-center gap-6 text-sm font-semibold text-slate-900">
                         <span>Evaluation progress</span>
                         <span className="font-medium text-slate-500">Step {currentStep} of 4</span>
                         <span className="font-medium text-slate-500">Answered {answeredCount}/{totalItems}</span>
                     </div>
 
-                    <div className="mt-4 grid grid-cols-4 gap-2 text-center text-sm font-semibold">
-                        <span className={`rounded-md px-2 py-2 ${currentStep === 1 ? 'bg-slate-100 text-slate-900' : 'text-slate-500'}`}>Management</span>
-                        <span className={`rounded-md px-2 py-2 ${currentStep === 2 ? 'bg-slate-100 text-slate-900' : 'text-slate-500'}`}>Content &amp; Pedagogy</span>
-                        <span className={`rounded-md px-2 py-2 ${currentStep === 3 ? 'bg-slate-100 text-slate-900' : 'text-slate-500'}`}>Commitment &amp; Transparency</span>
-                        <span className={`rounded-md px-2 py-2 ${currentStep === 4 ? 'bg-slate-100 text-slate-900' : 'text-slate-500'}`}>Review &amp; Submit</span>
+                    <div className="mt-2 grid grid-cols-4 gap-1 text-center text-xs font-semibold">
+                        <span className={`rounded-md px-2 py-1 ${currentStep === 1 ? 'bg-sky-200 text-sky-900' : 'bg-sky-50 text-slate-500'}`}>Management</span>
+                        <span className={`rounded-md px-2 py-1 ${currentStep === 2 ? 'bg-sky-200 text-sky-900' : 'bg-sky-50 text-slate-500'}`}>Content &amp; Pedagogy</span>
+                        <span className={`rounded-md px-2 py-1 ${currentStep === 3 ? 'bg-sky-200 text-sky-900' : 'bg-sky-50 text-slate-500'}`}>Commitment &amp; Transparency</span>
+                        <span className={`rounded-md px-2 py-1 ${currentStep === 4 ? 'bg-sky-200 text-sky-900' : 'bg-sky-50 text-slate-500'}`}>Review &amp; Submit</span>
                     </div>
+                </div>
+
+                <div className="max-h-[80vh] space-y-3 overflow-y-auto px-4 py-3 sm:px-5">
 
                     <section className="rounded-xl border border-slate-300 p-2 sm:p-2.5">
                         <h3 className="text-xs font-semibold text-slate-900 sm:text-sm">A. Faculty Information</h3>
                         <div className="mt-1.5 grid grid-cols-1 gap-1.5 text-[10px] sm:grid-cols-2 sm:gap-2 sm:text-[11px]">
                             <div>
                                 <p className="text-left text-[10px] leading-tight text-slate-500 sm:text-[11px]">Name of Faculty being Evaluated</p>
-                                <p className="mt-0.5 border-b border-slate-400 pb-1 text-left text-xs font-bold text-slate-900 sm:text-sm">{evaluation.instructor.toUpperCase()}</p>
+                                <p className="mt-0.5 pb-1 text-xs font-bold text-slate-900 sm:text-sm">{evaluation.instructor.toUpperCase()}</p>
                             </div>
                             <div>
                                 <p className="text-[10px] text-slate-500 sm:text-[11px]">College/Department</p>
-                                <p className="mt-0.5 border-b border-slate-400 pb-1 text-[11px] font-bold leading-tight text-slate-900 sm:text-xs">Masteral - Master in Information Technology</p>
+                                <p className="mt-0.5 pb-1 text-xs font-bold leading-tight text-slate-900 sm:text-sm">Masteral - Master in Information Technology</p>
                             </div>
                             <div>
                                 <p className="text-[10px] text-slate-500 sm:text-[11px]">Course Code/Title</p>
-                                <p className="mt-0.5 border-b border-slate-400 pb-1 text-xs font-bold text-slate-900 sm:text-sm">{evaluation.code} - {evaluation.title}</p>
+                                <p className="mt-0.5 pb-1 text-xs font-bold text-slate-900 sm:text-sm">{evaluation.code} - {evaluation.title}</p>
                             </div>
                             <div>
                                 <p className="text-[10px] text-slate-500 sm:text-[11px]">Program Level</p>
-                                <p className="mt-0.5 border-b border-slate-400 pb-1 text-xs font-bold text-slate-900 sm:text-sm">Year 3</p>
+                                <p className="mt-0.5 pb-1 text-xs font-bold text-slate-900 sm:text-sm">Year 3</p>
                             </div>
                             <div className="sm:col-span-2">
                                 <p className="text-[10px] text-slate-500 sm:text-[11px]">Semester or Term/Academic Year</p>
-                                <p className="mt-0.5 border-b border-slate-400 pb-1 text-xs font-bold text-slate-900 sm:text-sm">{evaluation.term}</p>
+                                <p className="mt-0.5 pb-1 text-xs font-bold text-slate-900 sm:text-sm">{evaluation.term}</p>
                             </div>
                         </div>
                     </section>
 
-                    <section className="rounded-xl border border-slate-300 p-4">
-                        <h3 className="text-lg font-semibold text-slate-900">B. Rating Scale</h3>
-                        <div className="mt-3 overflow-hidden rounded-lg border border-slate-300">
-                            <table className="min-w-full divide-y divide-slate-300 text-sm">
+                    <section className="rounded-xl border border-slate-300 p-2 sm:p-2.5">
+                        <h3 className="text-xs font-semibold text-slate-900 sm:text-sm">B. Rating Scale</h3>
+                        <div className="mt-2 overflow-hidden rounded-lg border border-slate-300">
+                            <table className="min-w-full border border-slate-300 text-[10px] sm:text-xs">
                                 <thead className="bg-slate-50">
                                     <tr>
-                                        <th className="px-3 py-2 text-left font-semibold text-slate-700">Scale</th>
-                                        <th className="px-3 py-2 text-left font-semibold text-slate-700">Qualitative Description</th>
-                                        <th className="px-3 py-2 text-left font-semibold text-slate-700">Operational Definition</th>
+                                        <th className="border border-slate-300 px-1.5 py-1 text-left font-semibold text-slate-700">Scale</th>
+                                        <th className="border border-slate-300 px-1.5 py-1 text-left font-semibold text-slate-700">Qualitative Description</th>
+                                        <th className="border border-slate-300 px-1.5 py-1 text-left font-semibold text-slate-700">Operational Definition</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-200 bg-white">
+                                <tbody className="bg-white">
                                     {ratingScale.map((row) => (
                                         <tr key={row.scale}>
-                                            <td className="px-3 py-2 text-center font-medium text-slate-900">{row.scale}</td>
-                                            <td className="px-3 py-2 text-slate-800">{row.qualitative}</td>
-                                            <td className="px-3 py-2 text-slate-700">{row.operational}</td>
+                                            <td className="border border-slate-300 px-1.5 py-1 text-center font-medium text-slate-900">{row.scale}</td>
+                                            <td className="border border-slate-300 px-1.5 py-1 text-slate-800">{row.qualitative}</td>
+                                            <td className="border border-slate-300 px-1.5 py-1 text-slate-700">{row.operational}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -320,9 +318,9 @@ export default function SefEvaluationModal({ isOpen, evaluation, submitUrl = '/e
                         </div>
                     </section>
 
-                    <section className="rounded-xl border border-slate-300 p-4">
-                        <h3 className="text-lg font-semibold text-slate-900">C. Instruction:</h3>
-                        <p className="mt-2 text-base text-slate-700">
+                    <section className="rounded-xl border border-slate-300 p-2 sm:p-2.5">
+                        <h3 className="text-xs font-semibold text-slate-900 sm:text-sm">C. Instruction:</h3>
+                        <p className="mt-1.5 text-[10px] leading-snug text-slate-700 sm:text-xs">
                             Carefully read each benchmark statement and rate the faculty by encircling the appropriate rating based on the scale above. The "Suggested Means of Verification" column may guide the supervisor in conducting an objective assessment.
                         </p>
                     </section>
@@ -344,8 +342,8 @@ export default function SefEvaluationModal({ isOpen, evaluation, submitUrl = '/e
                     )}
 
                     {currentStep < 4 && (
-                        <section className="rounded-xl border border-slate-300 p-4">
-                            <div className="overflow-x-auto">
+                        <section ref={benchmarkSectionRef} className="rounded-xl border border-slate-300 p-4">
+                            <div className="max-h-[46vh] overflow-auto">
                                 <table className="min-w-full table-fixed border border-slate-300 text-xs">
                                     <thead>
                                         <tr className="bg-slate-50">
