@@ -6,9 +6,11 @@ export default function Sidebar({
     dashboardUrl,
     evaluationUrl = '/evaluation',
     profileUrl = '/my-profile',
+    accountSettingsUrl = '#',
     activePage = 'dashboard',
     logoutUrl,
     csrfToken,
+    hasPendingEvaluations = false,
 }) {
     const fullName = `${user?.firstname ?? ''} ${user?.lastname ?? 'Student'}`.trim();
     const initial = (user?.firstname?.[0] ?? 'U').toUpperCase();
@@ -59,6 +61,9 @@ export default function Sidebar({
                         </svg>
                     </span>
                     <span className="text-sm font-medium">Evaluation</span>
+                    {hasPendingEvaluations ? (
+                        <span className="ml-auto inline-flex h-2.5 w-2.5 rounded-full bg-red-500" aria-label="Pending evaluations" title="Pending evaluations" />
+                    ) : null}
                 </a>
 
                 <a href={profileUrl} className={navClass('profile')}>
@@ -69,6 +74,18 @@ export default function Sidebar({
                         </svg>
                     </span>
                     <span className="text-sm font-medium">My Profile</span>
+                </a>
+
+                <div className="my-2 border-t border-slate-200" />
+
+                <a href={accountSettingsUrl} className={navClass('account-settings')}>
+                    <span className={iconClass('account-settings')}>
+                        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="12" cy="12" r="3" />
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                        </svg>
+                    </span>
+                    <span className="text-sm font-medium">Account Settings</span>
                 </a>
             </nav>
 

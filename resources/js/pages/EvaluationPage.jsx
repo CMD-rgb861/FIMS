@@ -8,6 +8,7 @@ export default function EvaluationPage({
     dashboardUrl = '/dashboard',
     evaluationUrl = '/evaluation',
     profileUrl = '/my-profile',
+    accountSettingsUrl = '/account-settings',
     evaluationStoreUrl = '/evaluations',
     logoutUrl = '/logout',
     csrfToken = '',
@@ -20,6 +21,7 @@ export default function EvaluationPage({
     selectedSchoolYear = '',
     selectedTerm = 'all',
     selectedSubject = '',
+    hasPendingEvaluations = false,
 }) {
     const [isEvaluationOpen, setIsEvaluationOpen] = useState(false);
     const [selectedEvaluation, setSelectedEvaluation] = useState(null);
@@ -31,7 +33,6 @@ export default function EvaluationPage({
             evaluated: item.evaluated || evaluatedInstructors.includes(item.instructor),
         }))
     ));
-
     const openEvaluationModal = (item) => {
         if (item.evaluated) {
             return;
@@ -80,9 +81,11 @@ export default function EvaluationPage({
                 dashboardUrl={dashboardUrl}
                 evaluationUrl={evaluationUrl}
                 profileUrl={profileUrl}
+                accountSettingsUrl={accountSettingsUrl}
                 activePage="evaluation"
                 logoutUrl={logoutUrl}
                 csrfToken={csrfToken}
+                hasPendingEvaluations={hasPendingEvaluations}
             />
 
             <main className="flex-1">

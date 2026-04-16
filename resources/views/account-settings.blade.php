@@ -4,7 +4,7 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
-        <title>Dashboard | {{ config('app.name', 'FIMS') }}</title>
+        <title>Account Settings | {{ config('app.name', 'FIMS') }}</title>
         <link rel="icon" type="image/png" href="{{ asset('image/LNULogo.png') }}">
 
         <link rel="preconnect" href="https://fonts.bunny.net">
@@ -13,7 +13,7 @@
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
     <body class="min-h-screen bg-slate-50 text-slate-900">
-        <div id="dashboard-root"></div>
-        <script id="dashboard-props" type="application/json">@json($dashboardProps)</script>
+        <div id="account-settings-root"></div>
+        <script id="account-settings-props" type="application/json">@json($accountSettingsProps)</script>
     </body>
 </html>

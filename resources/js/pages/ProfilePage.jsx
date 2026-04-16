@@ -16,6 +16,7 @@ export default function ProfilePage({
     dashboardUrl = '/dashboard',
     evaluationUrl = '/evaluation',
     profileUrl = '/my-profile',
+    accountSettingsUrl = '/account-settings',
     profileUpdateUrl = '/my-profile',
     logoutUrl = '/logout',
     csrfToken = '',
@@ -23,6 +24,7 @@ export default function ProfilePage({
     errors = {},
     oldInput = {},
     user = null,
+    hasPendingEvaluations = false,
 }) {
     const resolvedUser = useMemo(() => ({
         id_no: oldInput?.id_no ?? user?.id_no ?? '',
@@ -55,9 +57,11 @@ export default function ProfilePage({
                 dashboardUrl={dashboardUrl}
                 evaluationUrl={evaluationUrl}
                 profileUrl={profileUrl}
+                accountSettingsUrl={accountSettingsUrl}
                 activePage="profile"
                 logoutUrl={logoutUrl}
                 csrfToken={csrfToken}
+                hasPendingEvaluations={hasPendingEvaluations}
             />
 
             <main className="flex-1 p-6">

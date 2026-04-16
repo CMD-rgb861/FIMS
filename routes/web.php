@@ -53,6 +53,8 @@ Route::middleware('guest')->group(function () {
 Route::middleware('auth')->group(function () use ($facultyEvaluations) {
     Route::get('/my-profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('/my-profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::get('/account-settings', [ProfileController::class, 'accountSettings'])->name('account.settings.edit');
+    Route::put('/account-settings', [ProfileController::class, 'updateAccountSettings'])->name('account.settings.update');
 
     Route::get('/dashboard', function () use ($facultyEvaluations) {
         $currentUser = request()->user();
@@ -98,6 +100,7 @@ Route::middleware('auth')->group(function () use ($facultyEvaluations) {
             'dashboardUrl' => route('dashboard'),
             'evaluationUrl' => route('evaluation'),
             'profileUrl' => route('profile.edit'),
+            'accountSettingsUrl' => route('account.settings.edit'),
             'logoutUrl' => route('logout'),
             'csrfToken' => csrf_token(),
             'user' => [
@@ -128,6 +131,7 @@ Route::middleware('auth')->group(function () use ($facultyEvaluations) {
                 ],
             ],
             'recentEvaluations' => $recentEvaluations,
+            'hasPendingEvaluations' => $pendingCount > 0,
         ];
 
         return view('dashboard', [
@@ -236,6 +240,7 @@ Route::middleware('auth')->group(function () use ($facultyEvaluations) {
             'dashboardUrl' => route('dashboard'),
             'evaluationUrl' => route('evaluation'),
             'profileUrl' => route('profile.edit'),
+            'accountSettingsUrl' => route('account.settings.edit'),
             'evaluationStoreUrl' => route('evaluations.store'),
             'logoutUrl' => route('logout'),
             'csrfToken' => csrf_token(),
@@ -252,6 +257,7 @@ Route::middleware('auth')->group(function () use ($facultyEvaluations) {
             'selectedSchoolYear' => request('sy', $schoolYears[0]['value'] ?? ''),
             'selectedTerm' => $selectedTerm,
             'selectedSubject' => $selectedSubject,
+            'hasPendingEvaluations' => count($evaluatedInstructors) < count($facultyEvaluations),
         ];
 
         return view('evaluation', [

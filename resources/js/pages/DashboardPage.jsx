@@ -6,11 +6,13 @@ export default function DashboardPage({
     dashboardUrl = '/dashboard',
     evaluationUrl = '/evaluation',
     profileUrl = '/my-profile',
+    accountSettingsUrl = '/account-settings',
     logoutUrl = '/logout',
     csrfToken = '',
     user = null,
     summaryCards = [],
     recentEvaluations = [],
+    hasPendingEvaluations = false,
 }) {
     return (
         <div className="min-h-screen flex bg-slate-50 text-slate-900">
@@ -20,9 +22,11 @@ export default function DashboardPage({
                 dashboardUrl={dashboardUrl}
                 evaluationUrl={evaluationUrl}
                 profileUrl={profileUrl}
+                accountSettingsUrl={accountSettingsUrl}
                 activePage="dashboard"
                 logoutUrl={logoutUrl}
                 csrfToken={csrfToken}
+                hasPendingEvaluations={hasPendingEvaluations}
             />
 
             <main className="flex-1 p-6">

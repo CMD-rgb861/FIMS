@@ -3,23 +3,30 @@
 namespace App\Http\Controllers;
 
 use App\Models\PersonalInformation;
+use App\Models\SupervisorEvaluationSubmission;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class ProfileController extends Controller
 {
+    private const TOTAL_INSTRUCTORS = 4;
+
     public function edit(Request $request): View
     {
         $user = $request->user();
         $personalInformation = $user?->personalInformation;
+        $hasPendingEvaluations = $this->hasPendingEvaluations((int) $user->id);
 
         $profileProps = [
             'appName' => config('app.name', 'FIMS'),
             'dashboardUrl' => route('dashboard'),
             'evaluationUrl' => route('evaluation'),
             'profileUrl' => route('profile.edit'),
+            'accountSettingsUrl' => route('account.settings.edit'),
             'profileUpdateUrl' => route('profile.update'),
             'logoutUrl' => route('logout'),
             'csrfToken' => csrf_token(),
@@ -37,6 +44,7 @@ class ProfileController extends Controller
                 'email' => old('email'),
                 'contact_no' => old('contact_no'),
             ],
+            'hasPendingEvaluations' => $hasPendingEvaluations,
             'user' => [
                 'id_no' => $user?->id_no,
                 'firstname' => $user?->firstname,
@@ -53,6 +61,40 @@ class ProfileController extends Controller
 
         return view('profile', [
             'profileProps' => $profileProps,
+        ]);
+    }
+
+    public function accountSettings(Request $request): View
+    {
+        $user = $request->user();
+        $personalInformation = $user?->personalInformation;
+        $hasPendingEvaluations = $this->hasPendingEvaluations((int) $user->id);
+
+        $accountSettingsProps = [
+            'appName' => config('app.name', 'FIMS'),
+            'dashboardUrl' => route('dashboard'),
+            'evaluationUrl' => route('evaluation'),
+            'profileUrl' => route('profile.edit'),
+            'accountSettingsUrl' => route('account.settings.edit'),
+            'accountSettingsUpdateUrl' => route('account.settings.update'),
+            'logoutUrl' => route('logout'),
+            'csrfToken' => csrf_token(),
+            'status' => session('status'),
+            'errors' => session('errors') ? session('errors')->toArray() : [],
+            'oldInput' => [
+                'email' => old('email'),
+            ],
+            'hasPendingEvaluations' => $hasPendingEvaluations,
+            'user' => [
+                'id_no' => $user?->id_no,
+                'firstname' => $user?->firstname,
+                'lastname' => $user?->lastname,
+                'email' => $personalInformation?->email,
+            ],
+        ];
+
+        return view('account-settings', [
+            'accountSettingsProps' => $accountSettingsProps,
         ]);
     }
 
@@ -102,5 +144,53 @@ class ProfileController extends Controller
         return redirect()
             ->route('profile.edit')
             ->with('status', 'Profile updated successfully.');
+    }
+
+    public function updateAccountSettings(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        $personalInformation = $user->personalInformation;
+
+        $validated = $request->validate([
+            'email' => [
+                'required',
+                'email',
+                'max:255',
+                Rule::unique('personal_informations', 'email')->ignore($personalInformation?->id),
+            ],
+            'current_password' => ['nullable', 'required_with:password', 'current_password'],
+            'password' => ['nullable', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        $updatedPassword = !empty($validated['password']);
+
+        DB::transaction(function () use ($user, $personalInformation, $validated, $updatedPassword) {
+            PersonalInformation::query()->updateOrCreate(
+                ['user_id' => $user->id],
+                ['email' => $validated['email']]
+            );
+
+            if ($updatedPassword) {
+                $user->forceFill([
+                    'password' => Hash::make($validated['password']),
+                ])->save();
+            }
+        });
+
+        return redirect()
+            ->route('account.settings.edit')
+            ->with('status', $updatedPassword
+                ? 'Account settings updated successfully. Your password has been changed.'
+                : 'Account settings updated successfully.');
+    }
+
+    private function hasPendingEvaluations(int $userId): bool
+    {
+        $evaluatedCount = SupervisorEvaluationSubmission::query()
+            ->where('user_id', $userId)
+            ->distinct('instructor')
+            ->count('instructor');
+
+        return $evaluatedCount < self::TOTAL_INSTRUCTORS;
     }
 }

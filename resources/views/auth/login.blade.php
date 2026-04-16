@@ -5,11 +5,19 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
         <title>Login | {{ config('app.name', 'FIMS') }}</title>
+        <link rel="icon" type="image/png" href="{{ asset('image/LNULogo.png') }}">
 
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600,700" rel="stylesheet" />
 
         @vite(['resources/css/app.css', 'resources/js/app.js'])
+        <style>
+            /* Hide native password reveal controls so only the custom eye button appears. */
+            #password::-ms-reveal,
+            #password::-ms-clear {
+                display: none;
+            }
+        </style>
     </head>
     <body class="min-h-screen bg-slate-950 text-slate-100">
         <div class="relative min-h-screen overflow-hidden">
@@ -21,8 +29,8 @@
             <div class="pointer-events-none absolute -top-40 -left-40 h-96 w-96 rounded-full bg-cyan-400/20 blur-3xl"></div>
             <div class="pointer-events-none absolute -bottom-40 -right-20 h-[28rem] w-[28rem] rounded-full bg-blue-500/20 blur-3xl"></div>
 
-            <div class="relative mx-auto flex min-h-screen w-full max-w-xl items-center px-4 py-8 md:px-8">
-                <section class="w-full rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-950/30 backdrop-blur-xl sm:p-8">
+            <div class="relative mx-auto flex min-h-screen w-full max-w-md items-center px-4 py-8 md:px-6">
+                <section class="w-full rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl shadow-slate-950/30 backdrop-blur-xl sm:p-6">
                     <div class="mb-6">
                         <img
                             src="{{ asset('image/LNULogo.png') }}"
@@ -95,6 +103,11 @@
                             Sign In
                         </button>
                     </form>
+
+                    <div class="mt-5 border-t border-slate-200 pt-3 text-center text-xs text-slate-500">
+                        <p class="font-semibold tracking-wide text-slate-700">LNU FIMS</p>
+                        <p class="mt-0.5">Developed by ITSO Intern</p>
+                    </div>
                 </section>
             </div>
         </div>
