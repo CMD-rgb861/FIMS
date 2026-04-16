@@ -323,7 +323,7 @@ export default function SefEvaluationModal({ isOpen, evaluation, submitUrl = '/e
                     <section className="rounded-xl border border-slate-300 p-4">
                         <h3 className="text-lg font-semibold text-slate-900">C. Instruction:</h3>
                         <p className="mt-2 text-base text-slate-700">
-                            Carefully read each benchmark statement and rate the faculty by encircling the appropriate rating based on the scale above. Suggested means of verification may guide the supervisor.
+                            Carefully read each benchmark statement and rate the faculty by encircling the appropriate rating based on the scale above. The "Suggested Means of Verification" column may guide the supervisor in conducting an objective assessment.
                         </p>
                     </section>
 
