@@ -104,7 +104,7 @@
                         </button>
                     </form>
 
-                    <div class="mt-5 border-t border-slate-200 pt-3 text-center text-xs text-slate-500">
+                    <div class="mt-9 border-t border-slate-200 pt-3 text-center text-xs text-slate-500">
                         <p class="font-semibold tracking-wide text-slate-700">LNU FIMS</p>
                         <p class="mt-0.5">Developed by ITSO Intern</p>
                     </div>
