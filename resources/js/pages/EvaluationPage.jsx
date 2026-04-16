@@ -99,7 +99,7 @@ export default function EvaluationPage({
                         <h1 className="text-2xl font-semibold tracking-tight">Supervisor's Evaluation of Faculty (SEF)</h1>
                     </div>
 
-                    <form method="GET" action={dashboardUrl} className="mt-6">
+                    <form method="GET" action={evaluationUrl} className="mt-6">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 max-w-3xl">
                             <label className="block">
                                 <span className="sr-only">School Year</span>
