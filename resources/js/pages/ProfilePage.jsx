@@ -14,7 +14,7 @@ function firstError(errors, key) {
 export default function ProfilePage({
     appName = 'FIMS',
     dashboardUrl = '/dashboard',
-    evaluationUrl = '/dashboard',
+    evaluationUrl = '/evaluation',
     profileUrl = '/my-profile',
     profileUpdateUrl = '/my-profile',
     logoutUrl = '/logout',

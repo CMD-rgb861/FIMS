@@ -4,7 +4,7 @@ export default function Sidebar({
     user,
     appName,
     dashboardUrl,
-    evaluationUrl = '/dashboard',
+    evaluationUrl = '/evaluation',
     profileUrl = '/my-profile',
     activePage = 'dashboard',
     logoutUrl,

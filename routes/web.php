@@ -57,6 +57,87 @@ Route::middleware('auth')->group(function () use ($facultyEvaluations) {
     Route::get('/dashboard', function () use ($facultyEvaluations) {
         $currentUser = request()->user();
 
+        $totalInstructors = count($facultyEvaluations);
+        $evaluatedInstructors = SupervisorEvaluationSubmission::query()
+            ->where('user_id', $currentUser->id)
+            ->pluck('instructor')
+            ->unique()
+            ->values()
+            ->all();
+
+        $evaluatedCount = count($evaluatedInstructors);
+        $pendingCount = max($totalInstructors - $evaluatedCount, 0);
+        $completionRate = $totalInstructors > 0
+            ? round(($evaluatedCount / $totalInstructors) * 100, 2)
+            : 0;
+
+        $recentEvaluations = SupervisorEvaluationSubmission::query()
+            ->where('user_id', $currentUser->id)
+            ->latest('submitted_at')
+            ->take(5)
+            ->get()
+            ->map(function ($submission) {
+                $ratings = $submission->ratings ?? [];
+                $totalScore = collect($ratings)->sum(function ($score) {
+                    return (int) $score;
+                });
+
+                return [
+                    'instructor' => $submission->instructor,
+                    'course_code' => $submission->course_code,
+                    'course_title' => $submission->course_title,
+                    'rating_percentage' => round(($totalScore / 75) * 100, 2),
+                    'submitted_at' => optional($submission->submitted_at)->format('M d, Y h:i A') ?? '-',
+                ];
+            })
+            ->values()
+            ->all();
+
+        $dashboardProps = [
+            'appName' => config('app.name', 'FIMS'),
+            'dashboardUrl' => route('dashboard'),
+            'evaluationUrl' => route('evaluation'),
+            'profileUrl' => route('profile.edit'),
+            'logoutUrl' => route('logout'),
+            'csrfToken' => csrf_token(),
+            'user' => [
+                'id_no' => $currentUser?->id_no,
+                'firstname' => $currentUser?->firstname,
+                'lastname' => $currentUser?->lastname,
+            ],
+            'summaryCards' => [
+                [
+                    'label' => 'Total Instructors',
+                    'value' => $totalInstructors,
+                    'helper' => 'Faculty members assigned this term.',
+                ],
+                [
+                    'label' => 'Evaluated',
+                    'value' => $evaluatedCount,
+                    'helper' => 'Instructors you already evaluated.',
+                ],
+                [
+                    'label' => 'Pending',
+                    'value' => $pendingCount,
+                    'helper' => 'Instructors left to evaluate.',
+                ],
+                [
+                    'label' => 'Completion Rate',
+                    'value' => $completionRate . '%',
+                    'helper' => 'Overall evaluation completion.',
+                ],
+            ],
+            'recentEvaluations' => $recentEvaluations,
+        ];
+
+        return view('dashboard', [
+            'dashboardProps' => $dashboardProps,
+        ]);
+    })->name('dashboard');
+
+    Route::get('/evaluation', function () use ($facultyEvaluations) {
+        $currentUser = request()->user();
+
         $schoolYears = [
             ['label' => 'S.Y. 2025-2026 - 2', 'value' => '2025-2026-2'],
             ['label' => 'S.Y. 2025-2026 - 1', 'value' => '2025-2026-1'],
@@ -150,82 +231,34 @@ Route::middleware('auth')->group(function () use ($facultyEvaluations) {
             }));
         }
 
-        return view('dashboard', [
-            'schoolYears' => $schoolYears,
-            'terms' => $terms,
-            'subjects' => $subjects,
-            'evaluations' => $evaluations,
-            'evaluatedInstructors' => $evaluatedInstructors,
-        ]);
-    })->name('dashboard');
-
-    Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
-    Route::post('/evaluations', [FacultyEvaluationController::class, 'store'])->name('evaluations.store');
-
-    Route::get('/evaluation', function () use ($facultyEvaluations) {
-        $instructor = request('instructor', 'Unknown Instructor');
-        $currentUser = request()->user();
-
-        $selectedFaculty = collect($facultyEvaluations)
-            ->firstWhere('instructor', $instructor);
-
-        $isEvaluated = SupervisorEvaluationSubmission::query()
-            ->where('user_id', $currentUser?->id)
-            ->where('instructor', $selectedFaculty['instructor'] ?? $instructor)
-            ->exists();
-
-        $latestEvaluation = SupervisorEvaluationSubmission::query()
-            ->where('user_id', $currentUser?->id)
-            ->where('instructor', $selectedFaculty['instructor'] ?? $instructor)
-            ->latest('submitted_at')
-            ->first();
-
-        $latestRatings = $latestEvaluation?->ratings ?? [];
-        $latestScores = collect($latestRatings)
-            ->map(function ($score, $benchmark) {
-                return [
-                    'benchmark' => $benchmark,
-                    'score' => (int) $score,
-                ];
-            })
-            ->sortBy(function ($row) {
-                return (int) preg_replace('/[^0-9]/', '', $row['benchmark']);
-            })
-            ->values()
-            ->all();
-        $latestTotalScore = collect($latestScores)->sum('score');
-        $latestRatingPercentage = round(($latestTotalScore / 75) * 100, 2);
-
         $evaluationProps = [
             'appName' => config('app.name', 'FIMS'),
             'dashboardUrl' => route('dashboard'),
-            'evaluationUrl' => route('dashboard'),
+            'evaluationUrl' => route('evaluation'),
             'profileUrl' => route('profile.edit'),
-            'logoutUrl' => route('logout'),
             'evaluationStoreUrl' => route('evaluations.store'),
+            'logoutUrl' => route('logout'),
             'csrfToken' => csrf_token(),
             'user' => [
                 'id_no' => $currentUser?->id_no,
                 'firstname' => $currentUser?->firstname,
                 'lastname' => $currentUser?->lastname,
             ],
-            'instructor' => $selectedFaculty['instructor'] ?? $instructor,
-            'initials' => $selectedFaculty['initials'] ?? 'NA',
-            'subjects' => $selectedFaculty['subjects'] ?? [],
-            'isEvaluated' => $isEvaluated,
-            'evaluationResult' => $latestEvaluation ? [
-                'instructor' => $latestEvaluation->instructor,
-                'course_code' => $latestEvaluation->course_code,
-                'course_title' => $latestEvaluation->course_title,
-                'term' => $latestEvaluation->term,
-                'scores' => $latestScores,
-                'total_score' => $latestTotalScore,
-                'rating_percentage' => $latestRatingPercentage,
-            ] : null,
+            'schoolYears' => $schoolYears,
+            'terms' => $terms,
+            'subjects' => $subjects,
+            'evaluations' => $evaluations,
+            'evaluatedInstructors' => $evaluatedInstructors,
+            'selectedSchoolYear' => request('sy', $schoolYears[0]['value'] ?? ''),
+            'selectedTerm' => $selectedTerm,
+            'selectedSubject' => $selectedSubject,
         ];
 
         return view('evaluation', [
             'evaluationProps' => $evaluationProps,
         ]);
-    })->name('evaluation.page');
+    })->name('evaluation');
+
+    Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
+    Route::post('/evaluations', [FacultyEvaluationController::class, 'store'])->name('evaluations.store');
 });

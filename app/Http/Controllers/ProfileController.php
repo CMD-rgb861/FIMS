@@ -18,7 +18,7 @@ class ProfileController extends Controller
         $profileProps = [
             'appName' => config('app.name', 'FIMS'),
             'dashboardUrl' => route('dashboard'),
-            'evaluationUrl' => route('dashboard'),
+            'evaluationUrl' => route('evaluation'),
             'profileUrl' => route('profile.edit'),
             'profileUpdateUrl' => route('profile.update'),
             'logoutUrl' => route('logout'),
