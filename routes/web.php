@@ -3,7 +3,9 @@
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\FacultyEvaluationController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\UnitHeadGradeController;
 use App\Models\SupervisorEvaluationSubmission;
+use App\Models\UnitHeadGrade;
 use Illuminate\Support\Facades\Route;
 
 $facultyEvaluations = [
@@ -59,14 +61,36 @@ Route::middleware('auth')->group(function () use ($facultyEvaluations) {
     Route::get('/subjects', function () use ($facultyEvaluations) {
         $currentUser = request()->user();
 
+        $latestGradesByCourse = UnitHeadGrade::query()
+            ->where('user_id', $currentUser->id)
+            ->latest('submitted_at')
+            ->get()
+            ->unique(function ($grade) {
+                return $grade->instructor . '|' . $grade->course_code;
+            })
+            ->keyBy(function ($grade) {
+                return $grade->instructor . '|' . $grade->course_code;
+            });
+
         $subjects = collect($facultyEvaluations)
-            ->flatMap(function ($faculty) {
-                return collect($faculty['subjects'])->map(function ($subject) use ($faculty) {
+            ->flatMap(function ($faculty) use ($latestGradesByCourse) {
+                return collect($faculty['subjects'])->map(function ($subject) use ($faculty, $latestGradesByCourse) {
+                    $evaluationKey = $faculty['instructor'] . '|' . $subject['code'];
+                    $latestGrade = $latestGradesByCourse->get($evaluationKey);
+                    $unitHeadGrade = $latestGrade ? (float) $latestGrade->grade : null;
+                    $gradeStatus = 'For Evaluation';
+
+                    if ($unitHeadGrade !== null) {
+                        $gradeStatus = 'Passed';
+                    }
+
                     return [
                         'code' => $subject['code'],
                         'title' => $subject['title'],
                         'term' => $subject['term'],
                         'instructor' => $faculty['instructor'],
+                        'final_grade' => $unitHeadGrade,
+                        'status' => $gradeStatus,
                     ];
                 });
             })
@@ -80,6 +104,7 @@ Route::middleware('auth')->group(function () use ($facultyEvaluations) {
             'evaluationUrl' => route('evaluation'),
             'profileUrl' => route('profile.edit'),
             'accountSettingsUrl' => route('account.settings.edit'),
+            'unitHeadGradeStoreUrl' => route('unit-head-grades.store'),
             'logoutUrl' => route('logout'),
             'csrfToken' => csrf_token(),
             'user' => [
@@ -88,7 +113,7 @@ Route::middleware('auth')->group(function () use ($facultyEvaluations) {
                 'lastname' => $currentUser?->lastname,
             ],
             'subjects' => $subjects,
-            'hasPendingEvaluations' => SupervisorEvaluationSubmission::query()
+            'hasPendingEvaluations' => UnitHeadGrade::query()
                 ->where('user_id', $currentUser->id)
                 ->distinct('instructor')
                 ->count('instructor') < count($facultyEvaluations),
@@ -312,4 +337,5 @@ Route::middleware('auth')->group(function () use ($facultyEvaluations) {
 
     Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
     Route::post('/evaluations', [FacultyEvaluationController::class, 'store'])->name('evaluations.store');
+    Route::post('/unit-head-grades', [UnitHeadGradeController::class, 'store'])->name('unit-head-grades.store');
 });

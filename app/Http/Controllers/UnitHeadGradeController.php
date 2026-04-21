@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\SupervisorEvaluationSubmission;
+use App\Models\UnitHeadGrade;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-class FacultyEvaluationController extends Controller
+class UnitHeadGradeController extends Controller
 {
     public function store(Request $request): JsonResponse
     {
@@ -15,12 +15,10 @@ class FacultyEvaluationController extends Controller
             'course_code' => ['required', 'string', 'max:100'],
             'course_title' => ['required', 'string', 'max:255'],
             'term' => ['required', 'string', 'max:255'],
-            'ratings' => ['required', 'array', 'min:1'],
-            'ratings.*' => ['required', 'numeric', 'between:1,5'],
-            'comments' => ['nullable', 'string', 'max:2000'],
+            'grade' => ['required', 'numeric', 'between:1,5'],
         ]);
 
-        $submission = SupervisorEvaluationSubmission::query()->updateOrCreate(
+        $grade = UnitHeadGrade::query()->updateOrCreate(
             [
                 'user_id' => $request->user()->id,
                 'instructor' => $validated['instructor'],
@@ -29,16 +27,16 @@ class FacultyEvaluationController extends Controller
             [
                 'course_title' => $validated['course_title'],
                 'term' => $validated['term'],
-                'ratings' => $validated['ratings'],
-                'comments' => $validated['comments'] ?? null,
+                'grade' => round((float) $validated['grade'], 2),
                 'submitted_at' => now(),
             ]
         );
 
         return response()->json([
-            'message' => $submission->wasRecentlyCreated
-                ? 'Evaluation submitted successfully.'
-                : 'Evaluation updated successfully.',
-        ], $submission->wasRecentlyCreated ? 201 : 200);
+            'message' => $grade->wasRecentlyCreated
+                ? 'Grade submitted successfully.'
+                : 'Grade updated successfully.',
+            'grade' => (float) $grade->grade,
+        ], $grade->wasRecentlyCreated ? 201 : 200);
     }
 }

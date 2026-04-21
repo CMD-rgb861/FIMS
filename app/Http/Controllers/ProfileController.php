@@ -24,6 +24,7 @@ class ProfileController extends Controller
         $profileProps = [
             'appName' => config('app.name', 'FIMS'),
             'dashboardUrl' => route('dashboard'),
+            'subjectsUrl' => route('subjects'),
             'evaluationUrl' => route('evaluation'),
             'profileUrl' => route('profile.edit'),
             'accountSettingsUrl' => route('account.settings.edit'),
@@ -73,6 +74,7 @@ class ProfileController extends Controller
         $accountSettingsProps = [
             'appName' => config('app.name', 'FIMS'),
             'dashboardUrl' => route('dashboard'),
+            'subjectsUrl' => route('subjects'),
             'evaluationUrl' => route('evaluation'),
             'profileUrl' => route('profile.edit'),
             'accountSettingsUrl' => route('account.settings.edit'),
