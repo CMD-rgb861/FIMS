@@ -37,8 +37,8 @@
                             alt="LNU Logo"
                             class="mx-auto mb-4 h-20 w-20 object-contain sm:h-24 sm:w-24"
                         >
-                        <p class="text-center text-lg font-bold uppercase tracking-[0.28em] text-slate-800">FIMS PORTAL</p>
-                        <h2 class="mt-2 text-center text-xl font-normal text-slate-900">Login</h2>
+                        <p class="text-center text-lg font-bold uppercase tracking-[0.10em] text-slate-800">FIMS PORTAL</p>
+                        <h2 class="mt-1 text-center text-m font-semibold text-slate-900">Login</h2>
                     </div>
 
                     @if ($errors->any())
