@@ -4,6 +4,7 @@ import Sidebar from '../components/Sidebar';
 export default function DashboardPage({
     appName = 'FIMS',
     dashboardUrl = '/dashboard',
+    subjectsUrl = '/subjects',
     evaluationUrl = '/evaluation',
     profileUrl = '/my-profile',
     accountSettingsUrl = '/account-settings',
@@ -20,6 +21,7 @@ export default function DashboardPage({
                 user={user}
                 appName={appName}
                 dashboardUrl={dashboardUrl}
+                subjectsUrl={subjectsUrl}
                 evaluationUrl={evaluationUrl}
                 profileUrl={profileUrl}
                 accountSettingsUrl={accountSettingsUrl}

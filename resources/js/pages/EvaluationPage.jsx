@@ -6,6 +6,7 @@ import EvaluationResultModal from '../components/EvaluationResultModal';
 export default function EvaluationPage({
     appName = 'FIMS',
     dashboardUrl = '/dashboard',
+    subjectsUrl = '/subjects',
     evaluationUrl = '/evaluation',
     profileUrl = '/my-profile',
     accountSettingsUrl = '/account-settings',
@@ -79,6 +80,7 @@ export default function EvaluationPage({
                 user={user}
                 appName={appName}
                 dashboardUrl={dashboardUrl}
+                subjectsUrl={subjectsUrl}
                 evaluationUrl={evaluationUrl}
                 profileUrl={profileUrl}
                 accountSettingsUrl={accountSettingsUrl}

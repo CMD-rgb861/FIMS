@@ -56,6 +56,49 @@ Route::middleware('auth')->group(function () use ($facultyEvaluations) {
     Route::get('/account-settings', [ProfileController::class, 'accountSettings'])->name('account.settings.edit');
     Route::put('/account-settings', [ProfileController::class, 'updateAccountSettings'])->name('account.settings.update');
 
+    Route::get('/subjects', function () use ($facultyEvaluations) {
+        $currentUser = request()->user();
+
+        $subjects = collect($facultyEvaluations)
+            ->flatMap(function ($faculty) {
+                return collect($faculty['subjects'])->map(function ($subject) use ($faculty) {
+                    return [
+                        'code' => $subject['code'],
+                        'title' => $subject['title'],
+                        'term' => $subject['term'],
+                        'instructor' => $faculty['instructor'],
+                    ];
+                });
+            })
+            ->values()
+            ->all();
+
+        $subjectsProps = [
+            'appName' => config('app.name', 'FIMS'),
+            'dashboardUrl' => route('dashboard'),
+            'subjectsUrl' => route('subjects'),
+            'evaluationUrl' => route('evaluation'),
+            'profileUrl' => route('profile.edit'),
+            'accountSettingsUrl' => route('account.settings.edit'),
+            'logoutUrl' => route('logout'),
+            'csrfToken' => csrf_token(),
+            'user' => [
+                'id_no' => $currentUser?->id_no,
+                'firstname' => $currentUser?->firstname,
+                'lastname' => $currentUser?->lastname,
+            ],
+            'subjects' => $subjects,
+            'hasPendingEvaluations' => SupervisorEvaluationSubmission::query()
+                ->where('user_id', $currentUser->id)
+                ->distinct('instructor')
+                ->count('instructor') < count($facultyEvaluations),
+        ];
+
+        return view('subjects', [
+            'subjectsProps' => $subjectsProps,
+        ]);
+    })->name('subjects');
+
     Route::get('/dashboard', function () use ($facultyEvaluations) {
         $currentUser = request()->user();
 
@@ -98,6 +141,7 @@ Route::middleware('auth')->group(function () use ($facultyEvaluations) {
         $dashboardProps = [
             'appName' => config('app.name', 'FIMS'),
             'dashboardUrl' => route('dashboard'),
+            'subjectsUrl' => route('subjects'),
             'evaluationUrl' => route('evaluation'),
             'profileUrl' => route('profile.edit'),
             'accountSettingsUrl' => route('account.settings.edit'),
@@ -238,6 +282,7 @@ Route::middleware('auth')->group(function () use ($facultyEvaluations) {
         $evaluationProps = [
             'appName' => config('app.name', 'FIMS'),
             'dashboardUrl' => route('dashboard'),
+            'subjectsUrl' => route('subjects'),
             'evaluationUrl' => route('evaluation'),
             'profileUrl' => route('profile.edit'),
             'accountSettingsUrl' => route('account.settings.edit'),

@@ -4,6 +4,7 @@ export default function Sidebar({
     user,
     appName,
     dashboardUrl,
+    subjectsUrl = '/subjects',
     evaluationUrl = '/evaluation',
     profileUrl = '/my-profile',
     accountSettingsUrl = '#',
@@ -50,6 +51,17 @@ export default function Sidebar({
                         </svg>
                     </span>
                     <span className="text-sm font-medium">Dashboard</span>
+                </a>
+
+                <a href={subjectsUrl} className={navClass('subjects')}>
+                    <span className={iconClass('subjects')}>
+                        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M4 5h16" />
+                            <path d="M4 12h16" />
+                            <path d="M4 19h16" />
+                        </svg>
+                    </span>
+                    <span className="text-sm font-medium">Subjects</span>
                 </a>
 
                 <a href={evaluationUrl} className={navClass('evaluation')}>

@@ -14,6 +14,7 @@ function firstError(errors, key) {
 export default function AccountSettingsPage({
     appName = 'FIMS',
     dashboardUrl = '/dashboard',
+    subjectsUrl = '/subjects',
     evaluationUrl = '/evaluation',
     profileUrl = '/my-profile',
     accountSettingsUrl = '/account-settings',
@@ -49,6 +50,7 @@ export default function AccountSettingsPage({
                 user={user}
                 appName={appName}
                 dashboardUrl={dashboardUrl}
+                subjectsUrl={subjectsUrl}
                 evaluationUrl={evaluationUrl}
                 profileUrl={profileUrl}
                 accountSettingsUrl={accountSettingsUrl}

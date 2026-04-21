@@ -4,11 +4,13 @@ import DashboardPage from './pages/DashboardPage';
 import EvaluationPage from './pages/EvaluationPage';
 import ProfilePage from './pages/ProfilePage';
 import AccountSettingsPage from './pages/AccountSettingsPage';
+import SubjectsPage from './pages/SubjectsPage';
 
 const dashboardRoot = document.getElementById('dashboard-root');
 const evaluationRoot = document.getElementById('evaluation-root');
 const profileRoot = document.getElementById('profile-root');
 const accountSettingsRoot = document.getElementById('account-settings-root');
+const subjectsRoot = document.getElementById('subjects-root');
 
 function parseProps(scriptId) {
 	const propsScript = document.getElementById(scriptId);
@@ -68,6 +70,18 @@ if (accountSettingsRoot) {
 			React.StrictMode,
 			null,
 			React.createElement(AccountSettingsPage, props)
+		)
+	);
+}
+
+if (subjectsRoot) {
+	const props = parseProps('subjects-props');
+
+	createRoot(subjectsRoot).render(
+		React.createElement(
+			React.StrictMode,
+			null,
+			React.createElement(SubjectsPage, props)
 		)
 	);
 }
