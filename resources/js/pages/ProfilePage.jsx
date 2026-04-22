@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Sidebar from '../components/Sidebar';
 
 function firstError(errors, key) {
@@ -38,9 +38,19 @@ export default function ProfilePage({
         civil_status: oldInput?.civil_status ?? user?.civil_status ?? '',
         email: oldInput?.email ?? user?.email ?? '',
         contact_no: oldInput?.contact_no ?? user?.contact_no ?? '',
+        profile_photo_url: user?.profile_photo_url ?? '',
     }), [oldInput, user]);
 
     const [formData, setFormData] = useState(resolvedUser);
+    const [selectedPhotoPreview, setSelectedPhotoPreview] = useState(resolvedUser.profile_photo_url);
+
+    useEffect(() => {
+        return () => {
+            if (selectedPhotoPreview?.startsWith('blob:')) {
+                URL.revokeObjectURL(selectedPhotoPreview);
+            }
+        };
+    }, [selectedPhotoPreview]);
 
     const handleInputChange = (event) => {
         const { name, value } = event.target;
@@ -49,6 +59,22 @@ export default function ProfilePage({
             [name]: value,
         }));
     };
+
+    const handleProfilePhotoChange = (event) => {
+        const file = event.target.files?.[0];
+
+        if (!file) {
+            return;
+        }
+
+        if (selectedPhotoPreview?.startsWith('blob:')) {
+            URL.revokeObjectURL(selectedPhotoPreview);
+        }
+
+        setSelectedPhotoPreview(URL.createObjectURL(file));
+    };
+
+    const photoFallbackInitial = (formData.firstname?.[0] ?? user?.firstname?.[0] ?? 'U').toUpperCase();
 
     return (
         <div className="min-h-screen flex bg-slate-50 text-slate-900">
@@ -79,9 +105,40 @@ export default function ProfilePage({
                         </div>
                     ) : null}
 
-                    <form method="POST" action={profileUpdateUrl} className="space-y-4">
+                    <form method="POST" action={profileUpdateUrl} className="space-y-4" encType="multipart/form-data">
                         <input type="hidden" name="_token" value={csrfToken} />
                         <input type="hidden" name="_method" value="PUT" />
+
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                            <div className="flex items-center gap-4">
+                                {selectedPhotoPreview ? (
+                                    <img
+                                        src={selectedPhotoPreview}
+                                        alt="Profile preview"
+                                        className="h-16 w-16 rounded-full border border-slate-200 object-cover"
+                                    />
+                                ) : (
+                                    <div className="h-16 w-16 rounded-full bg-slate-900 text-white flex items-center justify-center text-lg font-semibold">
+                                        {photoFallbackInitial}
+                                    </div>
+                                )}
+
+                                <label className="block flex-1">
+                                    <span className="mb-1 block text-sm font-medium text-slate-700">Profile Photo</span>
+                                    <input
+                                        type="file"
+                                        name="profile_photo"
+                                        accept="image/png,image/jpeg,image/webp"
+                                        onChange={handleProfilePhotoChange}
+                                        className="block w-full text-sm text-slate-700 file:mr-4 file:rounded-md file:border-0 file:bg-blue-600 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-blue-700"
+                                    />
+                                    <span className="mt-1 block text-xs text-slate-500">Accepted: JPG, PNG, WEBP. Max size: 2MB.</span>
+                                    {firstError(errors, 'profile_photo') ? (
+                                        <span className="mt-1 block text-xs text-red-600">{firstError(errors, 'profile_photo')}</span>
+                                    ) : null}
+                                </label>
+                            </div>
+                        </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <label className="block">
@@ -222,13 +279,19 @@ export default function ProfilePage({
                             <label className="block md:col-span-2">
                                 <span className="mb-1 block text-sm font-medium text-slate-700">Email</span>
                                 <input
-                                    type="email"
+                                    type="hidden"
                                     name="email"
                                     value={formData.email}
-                                    onChange={handleInputChange}
-                                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
-                                    required
                                 />
+                                <input
+                                    type="email"
+                                    value={formData.email}
+                                    autoComplete="email"
+                                    readOnly
+                                    aria-readonly="true"
+                                    className="w-full cursor-not-allowed rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-500"
+                                />
+                                <span className="mt-1 block text-xs text-slate-500">Email can only be changed in Account Settings.</span>
                                 {firstError(errors, 'email') ? (
                                     <span className="mt-1 block text-xs text-red-600">{firstError(errors, 'email')}</span>
                                 ) : null}

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Sidebar from '../components/Sidebar';
 
 function firstError(errors, key) {
@@ -35,6 +35,13 @@ export default function AccountSettingsPage({
     }), [oldInput, user]);
 
     const [formData, setFormData] = useState(resolvedForm);
+
+    useEffect(() => {
+        setFormData((prev) => ({
+            ...prev,
+            email: resolvedForm.email,
+        }));
+    }, [resolvedForm]);
 
     const handleInputChange = (event) => {
         const { name, value } = event.target;
@@ -84,6 +91,8 @@ export default function AccountSettingsPage({
                                 name="email"
                                 value={formData.email}
                                 onChange={handleInputChange}
+                                onInput={handleInputChange}
+                                autoComplete="email"
                                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
                                 required
                             />

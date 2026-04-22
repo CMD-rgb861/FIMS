@@ -47,7 +47,7 @@
                         </div>
                     @endif
 
-                    <form method="POST" action="{{ route('login.store') }}" class="space-y-4">
+                    <form id="loginForm" method="POST" action="{{ route('login.store') }}" class="space-y-4">
                         @csrf
 
                         <div>
@@ -97,6 +97,7 @@
                         </div>
 
                         <button
+                            id="loginSubmitButton"
                             type="submit"
                             class="mt-2 inline-flex w-full items-center justify-center rounded-xl bg-cyan-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300"
                         >
@@ -117,6 +118,8 @@
             const togglePasswordButton = document.getElementById('togglePassword');
             const eyeOpen = document.getElementById('eyeOpen');
             const eyeClosed = document.getElementById('eyeClosed');
+            const loginForm = document.getElementById('loginForm');
+            const loginSubmitButton = document.getElementById('loginSubmitButton');
 
             if (passwordInput && togglePasswordButton && eyeOpen && eyeClosed) {
                 togglePasswordButton.addEventListener('click', function () {
@@ -127,6 +130,14 @@
                     eyeClosed.classList.toggle('hidden', showingPassword);
                     togglePasswordButton.setAttribute('aria-label', showingPassword ? 'Show password' : 'Hide password');
                     togglePasswordButton.setAttribute('aria-pressed', String(!showingPassword));
+                });
+            }
+
+            if (loginForm && loginSubmitButton) {
+                loginForm.addEventListener('submit', function () {
+                    loginSubmitButton.disabled = true;
+                    loginSubmitButton.classList.add('cursor-not-allowed', 'opacity-70');
+                    loginSubmitButton.textContent = 'Signing In...';
                 });
             }
         </script>

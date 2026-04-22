@@ -9,6 +9,6 @@ class PoesSubjects extends Model
 {
     use HasFactory;
 
-    protected $connection = 'poes';
+    protected $connection = 'lnu_poes';
     protected $table = 'enrollment_courses';
 }

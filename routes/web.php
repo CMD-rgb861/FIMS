@@ -60,6 +60,9 @@ Route::middleware('auth')->group(function () use ($facultyEvaluations) {
 
     Route::get('/subjects', function () use ($facultyEvaluations) {
         $currentUser = request()->user();
+        $profilePhotoUrl = $currentUser?->personalInformation?->profile_photo_path
+            ? asset('storage/' . $currentUser->personalInformation->profile_photo_path)
+            : null;
 
         $latestGradesByCourse = UnitHeadGrade::query()
             ->where('user_id', $currentUser->id)
@@ -111,6 +114,7 @@ Route::middleware('auth')->group(function () use ($facultyEvaluations) {
                 'id_no' => $currentUser?->id_no,
                 'firstname' => $currentUser?->firstname,
                 'lastname' => $currentUser?->lastname,
+                'profile_photo_url' => $profilePhotoUrl,
             ],
             'subjects' => $subjects,
             'hasPendingEvaluations' => UnitHeadGrade::query()
@@ -126,6 +130,9 @@ Route::middleware('auth')->group(function () use ($facultyEvaluations) {
 
     Route::get('/dashboard', function () use ($facultyEvaluations) {
         $currentUser = request()->user();
+        $profilePhotoUrl = $currentUser?->personalInformation?->profile_photo_path
+            ? asset('storage/' . $currentUser->personalInformation->profile_photo_path)
+            : null;
 
         $totalInstructors = count($facultyEvaluations);
         $evaluatedInstructors = SupervisorEvaluationSubmission::query()
@@ -176,6 +183,7 @@ Route::middleware('auth')->group(function () use ($facultyEvaluations) {
                 'id_no' => $currentUser?->id_no,
                 'firstname' => $currentUser?->firstname,
                 'lastname' => $currentUser?->lastname,
+                'profile_photo_url' => $profilePhotoUrl,
             ],
             'summaryCards' => [
                 [
@@ -210,6 +218,9 @@ Route::middleware('auth')->group(function () use ($facultyEvaluations) {
 
     Route::get('/evaluation', function () use ($facultyEvaluations) {
         $currentUser = request()->user();
+        $profilePhotoUrl = $currentUser?->personalInformation?->profile_photo_path
+            ? asset('storage/' . $currentUser->personalInformation->profile_photo_path)
+            : null;
 
         $schoolYears = [
             ['label' => 'S.Y. 2025-2026 - 2', 'value' => '2025-2026-2'],
@@ -318,6 +329,7 @@ Route::middleware('auth')->group(function () use ($facultyEvaluations) {
                 'id_no' => $currentUser?->id_no,
                 'firstname' => $currentUser?->firstname,
                 'lastname' => $currentUser?->lastname,
+                'profile_photo_url' => $profilePhotoUrl,
             ],
             'schoolYears' => $schoolYears,
             'terms' => $terms,

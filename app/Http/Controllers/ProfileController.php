@@ -8,6 +8,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -19,6 +20,9 @@ class ProfileController extends Controller
     {
         $user = $request->user();
         $personalInformation = $user?->personalInformation;
+        $profilePhotoUrl = $personalInformation?->profile_photo_path
+            ? asset('storage/' . $personalInformation->profile_photo_path)
+            : null;
         $hasPendingEvaluations = $this->hasPendingEvaluations((int) $user->id);
 
         $profileProps = [
@@ -57,6 +61,7 @@ class ProfileController extends Controller
                 'civil_status' => $personalInformation?->civil_status,
                 'email' => $personalInformation?->email,
                 'contact_no' => $personalInformation?->contact_no,
+                'profile_photo_url' => $profilePhotoUrl,
             ],
         ];
 
@@ -69,6 +74,9 @@ class ProfileController extends Controller
     {
         $user = $request->user();
         $personalInformation = $user?->personalInformation;
+        $profilePhotoUrl = $personalInformation?->profile_photo_path
+            ? asset('storage/' . $personalInformation->profile_photo_path)
+            : null;
         $hasPendingEvaluations = $this->hasPendingEvaluations((int) $user->id);
 
         $accountSettingsProps = [
@@ -92,6 +100,7 @@ class ProfileController extends Controller
                 'firstname' => $user?->firstname,
                 'lastname' => $user?->lastname,
                 'email' => $personalInformation?->email,
+                'profile_photo_url' => $profilePhotoUrl,
             ],
         ];
 
@@ -121,7 +130,20 @@ class ProfileController extends Controller
                 Rule::unique('personal_informations', 'email')->ignore($personalInformation?->id),
             ],
             'contact_no' => ['nullable', 'string', 'max:30'],
+            'profile_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
         ]);
+
+        $profilePhotoPath = $personalInformation?->profile_photo_path;
+
+        if ($request->hasFile('profile_photo')) {
+            $storedPath = $request->file('profile_photo')->store('profile-photos', 'public');
+
+            if ($profilePhotoPath && Storage::disk('public')->exists($profilePhotoPath)) {
+                Storage::disk('public')->delete($profilePhotoPath);
+            }
+
+            $profilePhotoPath = $storedPath;
+        }
 
         $user->fill([
             'id_no' => $validatedUser['id_no'],
@@ -140,6 +162,7 @@ class ProfileController extends Controller
                 'civil_status' => $validatedUser['civil_status'] ?? null,
                 'email' => $validatedUser['email'],
                 'contact_no' => $validatedUser['contact_no'] ?? null,
+                'profile_photo_path' => $profilePhotoPath,
             ]
         );
 

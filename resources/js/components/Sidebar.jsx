@@ -16,6 +16,7 @@ export default function Sidebar({
     const fullName = `${user?.firstname ?? ''} ${user?.lastname ?? 'Student'}`.trim();
     const initial = (user?.firstname?.[0] ?? 'U').toUpperCase();
     const appLabel = appName || 'FIMS';
+    const profilePhotoUrl = user?.profile_photo_url ?? '';
 
     const navClass = (key) => (
         activePage === key
@@ -30,7 +31,7 @@ export default function Sidebar({
     );
 
     return (
-        <aside className="hidden md:flex w-72 bg-white border-r border-slate-200 flex-col">
+        <aside className="hidden md:sticky md:top-0 md:flex h-screen w-72 bg-white border-r border-slate-200 flex-col">
             <div className="h-16 px-6 flex items-center gap-3 border-b border-slate-200">
                 <img
                     src="/image/LNULogo.png"
@@ -103,9 +104,17 @@ export default function Sidebar({
 
             <div className="p-4 border-t border-slate-200">
                 <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-slate-900 text-white flex items-center justify-center text-sm font-semibold">
-                        {initial}
-                    </div>
+                    {profilePhotoUrl ? (
+                        <img
+                            src={profilePhotoUrl}
+                            alt="Profile"
+                            className="h-10 w-10 rounded-full border border-slate-200 object-cover"
+                        />
+                    ) : (
+                        <div className="h-10 w-10 rounded-full bg-slate-900 text-white flex items-center justify-center text-sm font-semibold">
+                            {initial}
+                        </div>
+                    )}
                     <div className="min-w-0">
                         <div className="text-sm font-semibold truncate">{fullName}</div>
                         <div className="text-xs text-slate-500 truncate">{user?.id_no ?? 'N/A'}</div>

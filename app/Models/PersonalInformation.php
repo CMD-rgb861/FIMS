@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['user_id', 'dob', 'sex', 'civil_status', 'email', 'contact_no'])]
+#[Fillable(['user_id', 'dob', 'sex', 'civil_status', 'email', 'contact_no', 'profile_photo_path'])]
 class PersonalInformation extends Model
 {
     use HasFactory;
