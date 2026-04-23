@@ -6,6 +6,8 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UnitHeadGradeController;
 use App\Models\SupervisorEvaluationSubmission;
 use App\Models\UnitHeadGrade;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
 $facultyEvaluations = [
@@ -222,16 +224,69 @@ Route::middleware('auth')->group(function () use ($facultyEvaluations) {
             ? asset('storage/' . $currentUser->personalInformation->profile_photo_path)
             : null;
 
-        $schoolYears = [
-            ['label' => 'S.Y. 2025-2026 - 2', 'value' => '2025-2026-2'],
-            ['label' => 'S.Y. 2025-2026 - 1', 'value' => '2025-2026-1'],
-        ];
+        $schoolYearRows = DB::connection('lnu_poes')
+            ->table('school_years')
+            ->select(['id', 'school_year_from', 'school_year_to', 'semester', 'is_active'])
+            ->orderByDesc('id')
+            ->get();
+
+        $schoolYears = $schoolYearRows
+            ->map(function ($row) {
+                return [
+                    'label' => sprintf(
+                        'S.Y. %s-%s - %s',
+                        $row->school_year_from,
+                        $row->school_year_to,
+                        $row->semester
+                    ),
+                    'value' => (string) $row->id,
+                ];
+            })
+            ->values()
+            ->all();
+
+        if (empty($schoolYears)) {
+            $schoolYears = [
+                ['label' => 'S.Y. 2025-2026 - 2', 'value' => '2025-2026-2'],
+                ['label' => 'S.Y. 2025-2026 - 1', 'value' => '2025-2026-1'],
+            ];
+        }
 
         $terms = [
             ['label' => 'All', 'value' => 'all'],
             ['label' => 'For Evaluation', 'value' => 'for-evaluation'],
             ['label' => 'Evaluated', 'value' => 'evaluated'],
         ];
+        $selectedSchoolYear = request('sy', $schoolYears[0]['value'] ?? '');
+        $selectedSchoolYearId = ctype_digit((string) $selectedSchoolYear)
+            ? (int) $selectedSchoolYear
+            : null;
+        $selectedSchoolYearRow = $selectedSchoolYearId !== null
+            ? $schoolYearRows->firstWhere('id', $selectedSchoolYearId)
+            : null;
+        $scheduleWindow = null;
+
+        if ($selectedSchoolYearId !== null) {
+            $scheduleWindow = DB::connection('lnu_poes')
+                ->table('evaluation_schedules')
+                ->where('school_year_id', $selectedSchoolYearId)
+                ->orderByDesc('id')
+                ->first();
+        }
+
+        $today = Carbon::today();
+        $isEvaluationOpen = false;
+
+        if ($scheduleWindow) {
+            $scheduleStart = Carbon::parse($scheduleWindow->date_from)->startOfDay();
+            $scheduleEnd = Carbon::parse($scheduleWindow->date_extension ?: $scheduleWindow->date_to)->endOfDay();
+            $isEvaluationOpen = $today->betweenIncluded($scheduleStart, $scheduleEnd);
+        } elseif ($selectedSchoolYearRow) {
+            $isEvaluationOpen = (bool) $selectedSchoolYearRow->is_active;
+        }
+
+        $isEvaluationClosed = !$isEvaluationOpen;
+        $evaluationStatusLabel = $isEvaluationClosed ? 'Closed Evaluation' : 'Open for Evaluation';
 
         $selectedTerm = request('term', 'all');
         $selectedSubject = request('subject', '');
@@ -336,9 +391,11 @@ Route::middleware('auth')->group(function () use ($facultyEvaluations) {
             'subjects' => $subjects,
             'evaluations' => $evaluations,
             'evaluatedInstructors' => $evaluatedInstructors,
-            'selectedSchoolYear' => request('sy', $schoolYears[0]['value'] ?? ''),
+            'selectedSchoolYear' => $selectedSchoolYear,
             'selectedTerm' => $selectedTerm,
             'selectedSubject' => $selectedSubject,
+            'isEvaluationClosed' => $isEvaluationClosed,
+            'evaluationStatusLabel' => $evaluationStatusLabel,
             'hasPendingEvaluations' => count($evaluatedInstructors) < count($facultyEvaluations),
         ];
 

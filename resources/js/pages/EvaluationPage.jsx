@@ -22,6 +22,8 @@ export default function EvaluationPage({
     selectedSchoolYear = '',
     selectedTerm = 'all',
     selectedSubject = '',
+    isEvaluationClosed = false,
+    evaluationStatusLabel = 'Open for Evaluation',
     hasPendingEvaluations = false,
 }) {
     const [isEvaluationOpen, setIsEvaluationOpen] = useState(false);
@@ -35,7 +37,7 @@ export default function EvaluationPage({
         }))
     ));
     const openEvaluationModal = (item) => {
-        if (item.evaluated) {
+        if (item.evaluated || isEvaluationClosed) {
             return;
         }
 
@@ -104,51 +106,64 @@ export default function EvaluationPage({
                         <h1 className="text-2xl font-semibold tracking-tight">Supervisor's Evaluation of Faculty (SEF)</h1>
                     </div>
 
-                    <form method="GET" action={evaluationUrl} className="mt-6">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 max-w-3xl">
-                            <label className="block">
-                                <span className="sr-only">School Year</span>
-                                <select
-                                    name="sy"
-                                    defaultValue={selectedSchoolYear}
-                                    onChange={(event) => event.currentTarget.form?.submit()}
-                                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
-                                >
-                                    {schoolYears.map((option) => (
-                                        <option key={option.value} value={option.value}>{option.label}</option>
-                                    ))}
-                                </select>
-                            </label>
+                    <div className="mt-6 flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                        <form method="GET" action={evaluationUrl} className="w-full xl:flex-1">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 max-w-3xl">
+                                <label className="block">
+                                    <span className="sr-only">School Year</span>
+                                    <select
+                                        name="sy"
+                                        defaultValue={selectedSchoolYear}
+                                        onChange={(event) => event.currentTarget.form?.submit()}
+                                        className="w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                                    >
+                                        {schoolYears.map((option) => (
+                                            <option key={option.value} value={option.value}>{option.label}</option>
+                                        ))}
+                                    </select>
+                                </label>
 
-                            <label className="block">
-                                <span className="sr-only">Status</span>
-                                <select
-                                    name="term"
-                                    defaultValue={selectedTerm}
-                                    onChange={(event) => event.currentTarget.form?.submit()}
-                                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
-                                >
-                                    {terms.map((option) => (
-                                        <option key={option.value} value={option.value}>{option.label}</option>
-                                    ))}
-                                </select>
-                            </label>
+                                <label className="block">
+                                    <span className="sr-only">Status</span>
+                                    <select
+                                        name="term"
+                                        defaultValue={selectedTerm}
+                                        onChange={(event) => event.currentTarget.form?.submit()}
+                                        className="w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                                    >
+                                        {terms.map((option) => (
+                                            <option key={option.value} value={option.value}>{option.label}</option>
+                                        ))}
+                                    </select>
+                                </label>
 
-                            <label className="block">
-                                <span className="sr-only">Name</span>
-                                <select
-                                    name="subject"
-                                    defaultValue={selectedSubject}
-                                    onChange={(event) => event.currentTarget.form?.submit()}
-                                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
-                                >
-                                    {subjects.map((option) => (
-                                        <option key={option.value} value={option.value}>{option.label}</option>
-                                    ))}
-                                </select>
-                            </label>
+                                <label className="block">
+                                    <span className="sr-only">Name</span>
+                                    <select
+                                        name="subject"
+                                        defaultValue={selectedSubject}
+                                        onChange={(event) => event.currentTarget.form?.submit()}
+                                        className="w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                                    >
+                                        <option value="">Select a name to evaluate</option>
+                                        {subjects.filter((option) => option.value).map((option) => (
+                                            <option key={option.value} value={option.value}>{option.label}</option>
+                                        ))}
+                                    </select>
+                                </label>
+                            </div>
+                        </form>
+
+                        <div className="flex shrink-0 xl:pt-1">
+                            <span className={`inline-flex items-center justify-center rounded-md px-3 py-1.5 text-xs font-semibold whitespace-nowrap ${
+                                isEvaluationClosed
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'bg-emerald-100 text-emerald-700'
+                            }`}>
+                                {evaluationStatusLabel}
+                            </span>
                         </div>
-                    </form>
+                    </div>
 
                     <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
                         {evaluationItems.map((item, idx) => {
@@ -185,15 +200,23 @@ export default function EvaluationPage({
                                             <button
                                                 type="button"
                                                 onClick={() => openResultModal(item)}
-                                                className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+                                                className="inline-flex cursor-pointer items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
                                             >
                                                 View Evaluation
+                                            </button>
+                                        ) : isEvaluationClosed ? (
+                                            <button
+                                                type="button"
+                                                disabled
+                                                className="inline-flex items-center rounded-md bg-slate-300 px-3 py-2 text-xs font-semibold text-slate-600 cursor-not-allowed"
+                                            >
+                                                Evaluation Closed
                                             </button>
                                         ) : (
                                             <button
                                                 type="button"
                                                 onClick={() => openEvaluationModal(item)}
-                                                className="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"
+                                                className="inline-flex cursor-pointer items-center rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"
                                             >
                                                 Start Evaluation
                                             </button>
