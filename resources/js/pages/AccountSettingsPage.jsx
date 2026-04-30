@@ -16,6 +16,7 @@ export default function AccountSettingsPage({
     dashboardUrl = '/dashboard',
     subjectsUrl = '/subjects',
     evaluationUrl = '/evaluation',
+    reportsUrl = '/reports',
     profileUrl = '/my-profile',
     accountSettingsUrl = '/account-settings',
     accountSettingsUpdateUrl = '/account-settings',
@@ -59,6 +60,7 @@ export default function AccountSettingsPage({
                 dashboardUrl={dashboardUrl}
                 subjectsUrl={subjectsUrl}
                 evaluationUrl={evaluationUrl}
+                reportsUrl={reportsUrl}
                 profileUrl={profileUrl}
                 accountSettingsUrl={accountSettingsUrl}
                 activePage="account-settings"

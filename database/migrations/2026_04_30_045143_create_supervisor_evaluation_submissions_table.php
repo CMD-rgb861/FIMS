@@ -1,8 +1,11 @@
+<?php
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
         Schema::create('supervisor_evaluation_submissions', function (Blueprint $table) {
@@ -13,22 +16,35 @@ return new class extends Migration {
                   ->constrained('users')
                   ->cascadeOnDelete();
 
-            // Evaluated instructor & course info
-            $table->unsignedBigInteger('instructor_id')->index();
+            // Unit head / instructor reference
+            $table->foreignId('head_id')
+                  ->constrained('unit_heads') // adjust if table name differs
+                  ->cascadeOnDelete();
+
+            // Course info
             $table->string('course_code', 100);
             $table->string('course_title');
+
+            // Academic period
+            $table->foreignId('school_year_id')
+                  ->constrained('school_years') // make sure this table exists
+                  ->cascadeOnDelete();
+
             $table->string('term');
 
-            // Optional overall feedback
+            // Feedback
             $table->text('comments')->nullable();
 
-            // Submission metadata
-            $table->timestamp('submitted_at')->nullable();
+            // Timestamp of submission
+            $table->timestamp('submitted_at');
 
             $table->timestamps();
 
-            // Indexing for reports
-            $table->index(['instructor_id', 'term']);
+            // Indexes
+            $table->index('user_id');
+            $table->index('term');
+            $table->index('school_year_id');
+            $table->index('head_id');
         });
     }
 

@@ -6,6 +6,7 @@ export default function DashboardPage({
     dashboardUrl = '/dashboard',
     subjectsUrl = '/subjects',
     evaluationUrl = '/evaluation',
+    reportsUrl = '/reports',
     profileUrl = '/my-profile',
     accountSettingsUrl = '/account-settings',
     logoutUrl = '/logout',
@@ -23,6 +24,7 @@ export default function DashboardPage({
                 dashboardUrl={dashboardUrl}
                 subjectsUrl={subjectsUrl}
                 evaluationUrl={evaluationUrl}
+                reportsUrl={reportsUrl}
                 profileUrl={profileUrl}
                 accountSettingsUrl={accountSettingsUrl}
                 activePage="dashboard"

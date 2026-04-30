@@ -7,6 +7,7 @@ export default function SubjectsPage({
     dashboardUrl = '/dashboard',
     subjectsUrl = '/subjects',
     evaluationUrl = '/evaluation',
+    reportsUrl = '/reports',
     profileUrl = '/my-profile',
     accountSettingsUrl = '/account-settings',
     unitHeadGradeStoreUrl = '/unit-head-grades',
@@ -85,6 +86,7 @@ export default function SubjectsPage({
                 dashboardUrl={dashboardUrl}
                 subjectsUrl={subjectsUrl}
                 evaluationUrl={evaluationUrl}
+                reportsUrl={reportsUrl}
                 profileUrl={profileUrl}
                 accountSettingsUrl={accountSettingsUrl}
                 activePage="subjects"

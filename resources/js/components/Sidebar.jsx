@@ -6,6 +6,7 @@ export default function Sidebar({
     dashboardUrl,
     subjectsUrl = '/subjects',
     evaluationUrl = '/evaluation',
+    reportsUrl = '/reports',
     profileUrl = '/my-profile',
     accountSettingsUrl = '#',
     activePage = 'dashboard',
@@ -77,6 +78,18 @@ export default function Sidebar({
                     {hasPendingEvaluations ? (
                         <span className="ml-auto inline-flex h-2.5 w-2.5 rounded-full bg-red-500" aria-label="Pending evaluations" title="Pending evaluations" />
                     ) : null}
+                </a>
+
+                <a href={reportsUrl} className={navClass('reports')}>
+                    <span className={iconClass('reports')}>
+                        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M4 19h16" />
+                            <path d="M7 16V8" />
+                            <path d="M12 16V5" />
+                            <path d="M17 16v-4" />
+                        </svg>
+                    </span>
+                    <span className="text-sm font-medium">Reports</span>
                 </a>
 
                 <a href={profileUrl} className={navClass('profile')}>

@@ -25,6 +25,7 @@ export default function EvaluationPage({
     isEvaluationClosed = false,
     evaluationStatusLabel = 'Open for Evaluation',
     hasPendingEvaluations = false,
+    reportsUrl = '/reports',
 }) {
     const [isEvaluationOpen, setIsEvaluationOpen] = useState(false);
     const [selectedEvaluation, setSelectedEvaluation] = useState(null);
@@ -84,6 +85,7 @@ export default function EvaluationPage({
                 dashboardUrl={dashboardUrl}
                 subjectsUrl={subjectsUrl}
                 evaluationUrl={evaluationUrl}
+                reportsUrl={reportsUrl}
                 profileUrl={profileUrl}
                 accountSettingsUrl={accountSettingsUrl}
                 activePage="evaluation"
