@@ -18,9 +18,12 @@ export default function DashboardPage({
     hasPendingEvaluations = false,
     canAccessEvaluation = true,
 }) {
-    const gradeCard =
-        gradeSummaryCards.find((card) => String(card.label || '').toLowerCase() === 'grade') ||
-        gradeSummaryCards.find((card) => String(card.label || '').toLowerCase().includes('grade'));
+    const isUnitHead = user?.isUnitHead ?? false;
+    const gradeCard = gradeSummaryCards.find(
+        (card) =>
+            String(card.label || '').toLowerCase().includes('unit head grade') ||
+            String(card.label || '').toLowerCase().includes('faculty grade')
+    );
 
     const averageGradeCard =
         gradeSummaryCards.find((card) => String(card.label || '').toLowerCase() === 'average grade') ||
@@ -28,9 +31,9 @@ export default function DashboardPage({
 
     const summaryCards = [
         {
-            label: 'Grade',
+            label: isUnitHead ? 'Unit Head Grade' : 'Faculty Grade',
             value: gradeCard?.value ?? 'N/A',
-            helper: gradeCard?.helper ?? 'Current grade from your unit head.',
+            helper: gradeCard?.helper ?? (isUnitHead ? 'No grade issued yet.' : 'No grade received yet.'),
         },
         {
             label: 'Evaluation',

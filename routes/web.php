@@ -548,6 +548,7 @@ Route::middleware('auth')->group(function () use ($facultyEvaluations, $canAcces
                 'firstname' => $currentUser?->firstname,
                 'lastname' => $currentUser?->lastname,
                 'profile_photo_url' => $profilePhotoUrl,
+                'isUnitHead' => $canAccessEvaluation,
             ],
             'summaryCards' => [
                 [
@@ -576,13 +577,13 @@ Route::middleware('auth')->group(function () use ($facultyEvaluations, $canAcces
             'unitHeadEvaluationHelper' => $unitHeadEvaluationHelper,
             'gradeSummaryCards' => [
                 [
-                    'label' => 'Latest Grade',
+                    'label' => $canAccessEvaluation ? 'Unit Head Grade' : 'Faculty Grade',
                     'value' => isset($latestUnitHeadGrade['grade'])
                         ? number_format((float) $latestUnitHeadGrade['grade'], 2)
-                        : '-',
+                        : 'N/A',
                     'helper' => $latestUnitHeadGrade
                         ? $latestUnitHeadGrade['course_code'] . ' · ' . $latestUnitHeadGrade['instructor']
-                        : 'No unit head grade yet.',
+                        : ($canAccessEvaluation ? 'No grade issued yet.' : 'No grade received yet.'),
                 ],
                 [
                     'label' => 'Subjects Graded',
@@ -591,7 +592,7 @@ Route::middleware('auth')->group(function () use ($facultyEvaluations, $canAcces
                 ],
                 [
                     'label' => 'Average Grade',
-                    'value' => $averageGrade !== null ? number_format($averageGrade, 2) : '-',
+                    'value' => $averageGrade !== null ? number_format($averageGrade, 2) : 'N/A',
                     'helper' => 'Average of your recorded grades.',
                 ],
             ],
