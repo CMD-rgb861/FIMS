@@ -6,6 +6,7 @@ export default function Sidebar({
     dashboardUrl,
     subjectsUrl = '/subjects',
     evaluationUrl = '/evaluation',
+    gradesUrl = '/grades',
     reportsUrl = '/reports',
     profileUrl = '/my-profile',
     accountSettingsUrl = '#',
@@ -13,6 +14,7 @@ export default function Sidebar({
     logoutUrl,
     csrfToken,
     hasPendingEvaluations = false,
+    canAccessEvaluation = true,
 }) {
     const fullName = `${user?.firstname ?? ''} ${user?.lastname ?? 'Student'}`.trim();
     const initial = (user?.firstname?.[0] ?? 'U').toUpperCase();
@@ -66,19 +68,37 @@ export default function Sidebar({
                     <span className="text-sm font-medium">Subjects</span>
                 </a>
 
-                <a href={evaluationUrl} className={navClass('evaluation')}>
-                    <span className={iconClass('evaluation')}>
-                        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M4 4h16v14H4z" />
-                            <path d="M8 22h8" />
-                            <path d="M12 18v4" />
-                        </svg>
-                    </span>
-                    <span className="text-sm font-medium">Evaluation</span>
-                    {hasPendingEvaluations ? (
-                        <span className="ml-auto inline-flex h-2.5 w-2.5 rounded-full bg-red-500" aria-label="Pending evaluations" title="Pending evaluations" />
-                    ) : null}
-                </a>
+                {canAccessEvaluation ? (
+                    <a href={evaluationUrl} className={navClass('evaluation')}>
+                        <span className={iconClass('evaluation')}>
+                            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M4 4h16v14H4z" />
+                                <path d="M8 22h8" />
+                                <path d="M12 18v4" />
+                            </svg>
+                        </span>
+                        <span className="text-sm font-medium">Evaluation</span>
+                        {hasPendingEvaluations ? (
+                            <span className="ml-auto inline-flex h-2.5 w-2.5 rounded-full bg-red-500" aria-label="Pending evaluations" title="Pending evaluations" />
+                        ) : null}
+                    </a>
+                ) : null}
+
+                {canAccessEvaluation ? (
+                    <a href={gradesUrl} className={navClass('grades')}>
+                        <span className={iconClass('grades')}>
+                            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M8 6h12" />
+                                <path d="M8 12h12" />
+                                <path d="M8 18h12" />
+                                <path d="M4 6h.01" />
+                                <path d="M4 12h.01" />
+                                <path d="M4 18h.01" />
+                            </svg>
+                        </span>
+                        <span className="text-sm font-medium">Grades</span>
+                    </a>
+                ) : null}
 
                 <a href={reportsUrl} className={navClass('reports')}>
                     <span className={iconClass('reports')}>

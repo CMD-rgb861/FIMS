@@ -10,10 +10,14 @@ class FacultyEvaluationController extends Controller
 {
     public function store(Request $request): JsonResponse
     {
+        $canAccessEvaluation = $request->user()->isUnitHead();
+
+        abort_if(! $canAccessEvaluation, 403);
+
         $validated = $request->validate([
             'instructor' => ['required', 'string', 'max:255'],
             'course_code' => ['required', 'string', 'max:100'],
-            'course_title' => ['required', 'string', 'max:255'],
+            'course_title' => ['nullable', 'string', 'max:255'],
             'term' => ['required', 'string', 'max:255'],
             'ratings' => ['required', 'array', 'min:1'],
             'ratings.*' => ['required', 'numeric', 'between:1,5'],
@@ -27,7 +31,7 @@ class FacultyEvaluationController extends Controller
                 'course_code' => $validated['course_code'],
             ],
             [
-                'course_title' => $validated['course_title'],
+                'course_title' => trim((string) ($validated['course_title'] ?? '')),
                 'term' => $validated['term'],
                 'ratings' => $validated['ratings'],
                 'comments' => $validated['comments'] ?? null,

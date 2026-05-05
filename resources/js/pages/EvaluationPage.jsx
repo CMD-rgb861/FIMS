@@ -26,6 +26,7 @@ export default function EvaluationPage({
     evaluationStatusLabel = 'Open for Evaluation',
     hasPendingEvaluations = false,
     reportsUrl = '/reports',
+    canAccessEvaluation = true,
 }) {
     const [isEvaluationOpen, setIsEvaluationOpen] = useState(false);
     const [selectedEvaluation, setSelectedEvaluation] = useState(null);
@@ -92,6 +93,7 @@ export default function EvaluationPage({
                 logoutUrl={logoutUrl}
                 csrfToken={csrfToken}
                 hasPendingEvaluations={hasPendingEvaluations}
+                canAccessEvaluation={canAccessEvaluation}
             />
 
             <main className="flex-1">
@@ -180,8 +182,13 @@ export default function EvaluationPage({
                                                 <div className="text-sm font-semibold text-slate-900 truncate">
                                                     {item.instructor}
                                                 </div>
-                                                <div className="mt-1 text-xs text-slate-500 truncate">{item.code} - {item.title}</div>
-                                                <div className="mt-1 text-xs text-slate-500 truncate">Term: {item.term}</div>
+                                                <div className="mt-1 space-y-1 text-xs text-slate-500">
+                                                    <div className="truncate"><span className="font-semibold text-slate-700">Academic Rank:</span> {item.academic_rank || 'N/A'}</div>
+                                                    <div className="truncate"><span className="font-semibold text-slate-700">College/Department:</span> {item.college_department || 'N/A'}</div>
+                                                    <div className="truncate"><span className="font-semibold text-slate-700">Course Code/Title:</span> {item.code || item.title ? `${item.code ? `${item.code} - ` : ''}${item.title || ''}` : 'N/A'}</div>
+                                                    <div className="truncate"><span className="font-semibold text-slate-700">Program Year:</span> {item.program_year || 'N/A'}</div>
+                                                    <div className="truncate"><span className="font-semibold text-slate-700">Semester or Term/Academic Year:</span> {item.term || 'N/A'}</div>
+                                                </div>
                                             </div>
                                         </div>
                                         <div className="shrink-0">

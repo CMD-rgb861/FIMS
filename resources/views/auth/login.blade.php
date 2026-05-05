@@ -51,7 +51,7 @@
                         @csrf
 
                         <div>
-                            <label for="id_no" class="mb-1 block text-sm font-semibold text-slate-700">ID Number</label>
+                            <label for="id_no" class="mb-1 block text-sm font-semibold text-slate-700">User ID</label>
                             <input
                                 id="id_no"
                                 name="id_no"
@@ -60,7 +60,7 @@
                                 required
                                 autofocus
                                 class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-300/30"
-                                placeholder="e.g. 2026-0001"
+                                placeholder="e.g. IT-Faculty"
                             >
                         </div>
 

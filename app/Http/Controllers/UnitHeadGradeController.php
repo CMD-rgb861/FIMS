@@ -13,7 +13,7 @@ class UnitHeadGradeController extends Controller
         $validated = $request->validate([
             'instructor' => ['required', 'string', 'max:255'],
             'course_code' => ['required', 'string', 'max:100'],
-            'course_title' => ['required', 'string', 'max:255'],
+            'course_title' => ['nullable', 'string', 'max:255'],
             'term' => ['required', 'string', 'max:255'],
             'grade' => ['required', 'numeric', 'between:1,5'],
         ]);
@@ -25,7 +25,7 @@ class UnitHeadGradeController extends Controller
                 'course_code' => $validated['course_code'],
             ],
             [
-                'course_title' => $validated['course_title'],
+                'course_title' => trim((string) ($validated['course_title'] ?? '')),
                 'term' => $validated['term'],
                 'grade' => round((float) $validated['grade'], 2),
                 'submitted_at' => now(),

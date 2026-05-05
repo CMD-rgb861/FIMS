@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\PersonalInformation;
 use App\Models\SupervisorEvaluationSubmission;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +21,7 @@ class ProfileController extends Controller
     {
         $user = $request->user();
         $personalInformation = $user?->personalInformation;
+        $canAccessEvaluation = $this->canAccessEvaluation((string) $user->id_no);
         $profilePhotoUrl = $personalInformation?->profile_photo_path
             ? asset('storage/' . $personalInformation->profile_photo_path)
             : null;
@@ -50,6 +52,7 @@ class ProfileController extends Controller
                 'email' => old('email'),
                 'contact_no' => old('contact_no'),
             ],
+            'canAccessEvaluation' => $canAccessEvaluation,
             'hasPendingEvaluations' => $hasPendingEvaluations,
             'user' => [
                 'id_no' => $user?->id_no,
@@ -75,6 +78,7 @@ class ProfileController extends Controller
     {
         $user = $request->user();
         $personalInformation = $user?->personalInformation;
+        $canAccessEvaluation = $this->canAccessEvaluation((string) $user->id_no);
         $profilePhotoUrl = $personalInformation?->profile_photo_path
             ? asset('storage/' . $personalInformation->profile_photo_path)
             : null;
@@ -96,6 +100,7 @@ class ProfileController extends Controller
             'oldInput' => [
                 'email' => old('email'),
             ],
+            'canAccessEvaluation' => $canAccessEvaluation,
             'hasPendingEvaluations' => $hasPendingEvaluations,
             'user' => [
                 'id_no' => $user?->id_no,
@@ -219,5 +224,12 @@ class ProfileController extends Controller
             ->count('instructor');
 
         return $evaluatedCount < self::TOTAL_INSTRUCTORS;
+    }
+
+    private function canAccessEvaluation(string $idNo): bool
+    {
+        return User::query()
+            ->where('id_no', $idNo)
+            ->first()?->isUnitHead() === true;
     }
 }

@@ -1,8 +1,11 @@
+<?php
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
         Schema::create('supervisor_evaluation_submissions', function (Blueprint $table) {
@@ -14,10 +17,13 @@ return new class extends Migration {
                   ->cascadeOnDelete();
 
             // Evaluated instructor & course info
-            $table->unsignedBigInteger('instructor_id')->index();
+            $table->string('instructor', 255)->index();
             $table->string('course_code', 100);
             $table->string('course_title');
             $table->string('term');
+
+            // Ratings data
+            $table->json('ratings')->nullable();
 
             // Optional overall feedback
             $table->text('comments')->nullable();
@@ -28,7 +34,7 @@ return new class extends Migration {
             $table->timestamps();
 
             // Indexing for reports
-            $table->index(['instructor_id', 'term']);
+            $table->index(['instructor', 'term']);
         });
     }
 

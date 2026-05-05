@@ -164,6 +164,10 @@ export default function SefEvaluationModal({ isOpen, evaluation, submitUrl = '/e
             return;
         }
 
+        const safeCourseCode = String(evaluation.code ?? '').trim() || 'N/A';
+        const safeCourseTitle = String(evaluation.title ?? '').trim() || 'N/A';
+        const safeTerm = String(evaluation.term ?? '').trim() || 'N/A';
+
         setIsSubmitting(true);
         setSubmitError('');
         setSubmitSuccess('');
@@ -179,9 +183,9 @@ export default function SefEvaluationModal({ isOpen, evaluation, submitUrl = '/e
                 credentials: 'same-origin',
                 body: JSON.stringify({
                     instructor: evaluation.instructor,
-                    course_code: evaluation.code,
-                    course_title: evaluation.title,
-                    term: evaluation.term,
+                    course_code: safeCourseCode,
+                    course_title: safeCourseTitle,
+                    term: safeTerm,
                     ratings,
                     comments: comments.trim() || null,
                 }),
@@ -217,9 +221,9 @@ export default function SefEvaluationModal({ isOpen, evaluation, submitUrl = '/e
                 instructor: evaluation.instructor,
                 evaluation_result: {
                     instructor: evaluation.instructor,
-                    course_code: evaluation.code,
-                    course_title: evaluation.title,
-                    term: evaluation.term,
+                    course_code: safeCourseCode,
+                    course_title: safeCourseTitle,
+                    term: safeTerm,
                     scores: submittedScores,
                     total_score: submittedTotal,
                     rating_percentage: submittedRating,

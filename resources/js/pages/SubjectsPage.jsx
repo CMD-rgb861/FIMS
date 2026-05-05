@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import Sidebar from '../components/Sidebar';
-import FacultyGradeModal from '../components/FacultyGradeModal';
 
 export default function SubjectsPage({
     appName = 'FIMS',
@@ -15,68 +14,39 @@ export default function SubjectsPage({
     csrfToken = '',
     user = null,
     subjects = [],
+    availableTerms = [],
     hasPendingEvaluations = false,
+    canAccessEvaluation = true,
 }) {
-    const [subjectItems, setSubjectItems] = useState(subjects);
+    const displayName = user?.display_name || [user?.firstname, user?.lastname].filter(Boolean).join(' ') || 'Faculty';
+    const subjectItems = Array.isArray(subjects) ? subjects : [];
     const [selectedTerm, setSelectedTerm] = useState('all');
-    const [selectedInstructor, setSelectedInstructor] = useState('all');
-    const [isEvaluationOpen, setIsEvaluationOpen] = useState(false);
-    const [selectedEvaluation, setSelectedEvaluation] = useState(null);
 
     const termOptions = useMemo(() => {
-        return Array.from(new Set(subjectItems.map((subject) => subject.term).filter(Boolean)));
-    }, [subjectItems]);
+        const fromProps = (Array.isArray(availableTerms) ? availableTerms : [])
+            .map((term) => String(term || '').trim())
+            .filter(Boolean);
 
-    const instructorOptions = useMemo(() => {
-        return Array.from(new Set(subjectItems.map((subject) => subject.instructor).filter(Boolean)));
-    }, [subjectItems]);
+        const fromSubjects = subjectItems
+            .map((subject) => {
+                const value = subject.term || subject.semester || (subject.school_year_id ? `School Year #${subject.school_year_id}` : '');
+                return String(value || '').trim();
+            })
+            .filter(Boolean);
 
-    const filteredSubjects = useMemo(() => {
-        return subjectItems.filter((subject) => {
-            const termMatched = selectedTerm === 'all' || subject.term === selectedTerm;
-            const instructorMatched = selectedInstructor === 'all' || subject.instructor === selectedInstructor;
+        return Array.from(new Set([...fromProps, ...fromSubjects])).sort((a, b) => a.localeCompare(b));
+    }, [availableTerms, subjectItems]);
 
-            return termMatched && instructorMatched;
-        });
-    }, [subjectItems, selectedTerm, selectedInstructor]);
-
-    const openEvaluationModal = (subject) => {
-        setSelectedEvaluation({
-            code: subject.code,
-            title: subject.title,
-            instructor: subject.instructor,
-            term: subject.term,
-            status: subject.status,
-            final_grade: subject.final_grade,
-        });
-        setIsEvaluationOpen(true);
-    };
-
-    const closeEvaluationModal = () => {
-        setIsEvaluationOpen(false);
-        setSelectedEvaluation(null);
-    };
-
-    const handleEvaluationSubmitted = ({ evaluation_result: evaluationResult }) => {
-        if (!evaluationResult) {
-            return;
+    const filteredItems = useMemo(() => {
+        if (selectedTerm === 'all') {
+            return subjectItems;
         }
 
-        const finalGrade = evaluationResult.final_grade ?? null;
-        const nextStatus = finalGrade !== null && finalGrade !== undefined
-            ? 'Passed'
-            : 'For Evaluation';
-
-        setSubjectItems((prev) => prev.map((item) => (
-            item.instructor === evaluationResult.instructor && item.code === evaluationResult.course_code
-                ? {
-                    ...item,
-                    final_grade: finalGrade,
-                    status: nextStatus,
-                }
-                : item
-        )));
-    };
+        return subjectItems.filter((subject) => {
+            const value = String(subject.term || subject.semester || (subject.school_year_id ? `School Year #${subject.school_year_id}` : '') || '').trim();
+            return value === selectedTerm;
+        });
+    }, [selectedTerm, subjectItems]);
 
     return (
         <div className="h-screen flex overflow-hidden bg-slate-50 text-slate-900">
@@ -93,105 +63,77 @@ export default function SubjectsPage({
                 logoutUrl={logoutUrl}
                 csrfToken={csrfToken}
                 hasPendingEvaluations={hasPendingEvaluations}
+                canAccessEvaluation={canAccessEvaluation}
             />
 
             <main className="flex-1 overflow-y-auto p-6">
                 <div className="mb-6">
-                    <h1 className="text-2xl font-semibold tracking-tight">Subjects</h1>
-                    <p className="mt-1 text-sm text-slate-500">All assigned subjects for this term.</p>
+                    <h1 className="text-2xl font-semibold tracking-tight">Enrolled Subjects</h1>
+                    <p className="mt-1 text-sm text-slate-500">Faculty: {displayName}</p>
                 </div>
 
-                <form className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl">
-                    <label className="block">
-                        <span className="mb-1 block text-sm font-medium text-slate-700">Term</span>
-                        <select
-                            value={selectedTerm}
-                            onChange={(event) => setSelectedTerm(event.target.value)}
-                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
-                        >
-                            <option value="all">All Terms</option>
-                            {termOptions.map((term) => (
-                                <option key={term} value={term}>{term}</option>
-                            ))}
-                        </select>
-                    </label>
-
-                    <label className="block">
-                        <span className="mb-1 block text-sm font-medium text-slate-700">Instructor</span>
-                        <select
-                            value={selectedInstructor}
-                            onChange={(event) => setSelectedInstructor(event.target.value)}
-                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
-                        >
-                            <option value="all">All Instructors</option>
-                            {instructorOptions.map((instructor) => (
-                                <option key={instructor} value={instructor}>{instructor}</option>
-                            ))}
-                        </select>
-                    </label>
-                </form>
-
                 <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto">
+                    <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+                        <p className="text-sm font-semibold text-slate-900">Enrolled Subjects</p>
+                        <div className="flex items-center gap-3">
+                            <label className="text-xs text-slate-600">
+                                <span className="mr-2">Term/Semester</span>
+                                <select
+                                    value={selectedTerm}
+                                    onChange={(event) => setSelectedTerm(event.target.value)}
+                                    className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
+                                >
+                                    <option value="all">All</option>
+                                    {termOptions.map((term) => (
+                                        <option key={term} value={term}>
+                                            {term}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                            <p className="text-xs text-slate-500">
+                                {filteredItems.length} of {subjectItems.length} record{subjectItems.length === 1 ? '' : 's'}
+                            </p>
+                        </div>
+                    </div>
+
                     <table className="min-w-full divide-y divide-slate-200 text-xs">
                         <thead className="bg-slate-50">
                             <tr>
-                                <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Code</th>
-                                <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Subject Title</th>
-                                <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Instructor</th>
-                                <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Term</th>
-                                <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Final Grade</th>
-                                <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Status</th>
+                                <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Course Code</th>
+                                <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Course Description</th>
+                                <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Course Units</th>
+                                <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Section Code</th>
+                                <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Schedule Time</th>
+                                <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Schedule Days</th>
+                                <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Room</th>
+                                <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Term/Semester</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200 bg-white">
-                            {filteredSubjects.length > 0 ? (
-                                filteredSubjects.map((subject, index) => (
-                                    <tr key={`${subject.code}-${subject.instructor}-${index}`}>
-                                        <td className="px-4 py-2.5 text-slate-900 font-medium">{subject.code}</td>
-                                        <td className="px-4 py-2.5 text-slate-700">{subject.title}</td>
-                                        <td className="px-4 py-2.5 text-slate-700">{subject.instructor}</td>
-                                        <td className="px-4 py-2.5 text-slate-700">{subject.term}</td>
-                                        <td className="px-4 py-2.5 text-slate-700">
-                                            {subject.final_grade !== null && subject.final_grade !== undefined
-                                                ? Number(subject.final_grade).toFixed(1)
-                                                : '-'}
-                                        </td>
-                                        <td className="px-4 py-2.5">
-                                            {subject.status === 'Passed' ? (
-                                                <span className="inline-flex items-center rounded-md bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                                                    Passed
-                                                </span>
-                                            ) : (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => openEvaluationModal(subject)}
-                                                    className="inline-flex items-center rounded-md bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700 hover:bg-amber-200"
-                                                >
-                                                    View
-                                                </button>
-                                            )}
-                                        </td>
+                            {filteredItems.length > 0 ? (
+                                filteredItems.map((subject, index) => (
+                                    <tr key={`${subject.course_code}-${subject.course_description}-${index}`}>
+                                        <td className="px-4 py-2.5 font-medium text-slate-900">{subject.course_code || '-'}</td>
+                                        <td className="px-4 py-2.5 text-slate-700">{subject.course_description || '-'}</td>
+                                        <td className="px-4 py-2.5 text-slate-700">{subject.course_units ?? '-'}</td>
+                                        <td className="px-4 py-2.5 text-slate-700">{subject.section_code || '-'}</td>
+                                        <td className="px-4 py-2.5 text-slate-700">{subject.schedule_time || '-'}</td>
+                                        <td className="px-4 py-2.5 text-slate-700">{subject.schedule_days || '-'}</td>
+                                        <td className="px-4 py-2.5 text-slate-700">{subject.room || '-'}</td>
+                                        <td className="px-4 py-2.5 text-slate-700">{subject.term || subject.semester || (subject.school_year_id ? `School Year #${subject.school_year_id}` : '-')}</td>
                                     </tr>
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan={6} className="px-4 py-6 text-center text-slate-500">
-                                        No subjects available.
+                                    <td colSpan={8} className="px-4 py-6 text-center text-slate-500">
+                                        No enrolled subjects were found for this faculty member.
                                     </td>
                                 </tr>
                             )}
                         </tbody>
                     </table>
                 </section>
-
-                <FacultyGradeModal
-                    isOpen={isEvaluationOpen}
-                    evaluation={selectedEvaluation}
-                    submitUrl={unitHeadGradeStoreUrl}
-                    csrfToken={csrfToken}
-                    onSubmitted={handleEvaluationSubmitted}
-                    onClose={closeEvaluationModal}
-                />
             </main>
         </div>
     );

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import Sidebar from '../components/Sidebar';
 
 export default function DashboardPage({
@@ -12,10 +12,38 @@ export default function DashboardPage({
     logoutUrl = '/logout',
     csrfToken = '',
     user = null,
-    summaryCards = [],
-    recentEvaluations = [],
+    gradeSummaryCards = [],
+    unitHeadEvaluationRating = 'N/A',
+    unitHeadEvaluationHelper = 'Unit Head evaluation rating will appear once submitted.',
     hasPendingEvaluations = false,
+    canAccessEvaluation = true,
 }) {
+    const gradeCard =
+        gradeSummaryCards.find((card) => String(card.label || '').toLowerCase() === 'grade') ||
+        gradeSummaryCards.find((card) => String(card.label || '').toLowerCase().includes('grade'));
+
+    const averageGradeCard =
+        gradeSummaryCards.find((card) => String(card.label || '').toLowerCase() === 'average grade') ||
+        gradeSummaryCards.find((card) => String(card.label || '').toLowerCase().includes('average'));
+
+    const summaryCards = [
+        {
+            label: 'Grade',
+            value: gradeCard?.value ?? 'N/A',
+            helper: gradeCard?.helper ?? 'Current grade from your unit head.',
+        },
+        {
+            label: 'Evaluation',
+            value: unitHeadEvaluationRating,
+            helper: unitHeadEvaluationHelper,
+        },
+        {
+            label: 'Average Grade',
+            value: averageGradeCard?.value ?? 'N/A',
+            helper: averageGradeCard?.helper ?? 'Computed average grade for the current term.',
+        },
+    ];
+
     return (
         <div className="min-h-screen flex bg-slate-50 text-slate-900">
             <Sidebar
@@ -31,58 +59,46 @@ export default function DashboardPage({
                 logoutUrl={logoutUrl}
                 csrfToken={csrfToken}
                 hasPendingEvaluations={hasPendingEvaluations}
+                canAccessEvaluation={canAccessEvaluation}
             />
 
-            <main className="flex-1 p-6">
-                <div className="mb-6">
-                    <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-                    <p className="mt-1 text-sm text-slate-500">Overview of your faculty evaluation progress.</p>
-                </div>
-
-                <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                    {summaryCards.map((card) => (
-                        <div key={card.label} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                            <p className="text-xs uppercase tracking-wide text-slate-500">{card.label}</p>
-                            <p className="mt-2 text-3xl font-semibold text-slate-900">{card.value}</p>
-                            <p className="mt-2 text-xs text-slate-500">{card.helper}</p>
+            <main className="flex-1 overflow-y-auto p-6">
+                <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-slate-950 px-6 py-7 text-white shadow-xl shadow-slate-900/10 sm:px-8">
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(125,211,252,0.24),_transparent_38%),radial-gradient(circle_at_bottom_left,_rgba(148,163,184,0.18),_transparent_35%)]" />
+                    <div className="relative">
+                        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-200/90">Faculty dashboard</p>
+                        <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Your grades, evaluations, and progress in one place.</h1>
+                        <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
+                            Track the grades issued by your unit head, review recent evaluation activity, and quickly see where you stand for the current term.
+                        </p>
+                        <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                            {summaryCards.map((card) => (
+                                <div
+                                    key={card.label}
+                                    className={`rounded-2xl px-4 py-4 backdrop-blur-sm ${
+                                        card.label === 'Average Grade'
+                                            ? 'border border-cyan-300/30 bg-cyan-300/10'
+                                            : 'border border-white/10 bg-white/8'
+                                    }`}
+                                >
+                                    <p
+                                        className={`text-[11px] uppercase tracking-[0.22em] ${
+                                            card.label === 'Average Grade' ? 'text-cyan-100' : 'text-slate-300'
+                                        }`}
+                                    >
+                                        {card.label}
+                                    </p>
+                                    <p className="mt-2 text-2xl font-semibold text-white">{card.value}</p>
+                                    <p
+                                        className={`mt-2 text-xs leading-5 ${
+                                            card.label === 'Average Grade' ? 'text-cyan-100' : 'text-slate-300'
+                                        }`}
+                                    >
+                                        {card.helper}
+                                    </p>
+                                </div>
+                            ))}
                         </div>
-                    ))}
-                </section>
-
-                <section className="mt-6 rounded-xl border border-slate-200 bg-white shadow-sm">
-                    <div className="border-b border-slate-200 px-5 py-4">
-                        <h2 className="text-base font-semibold text-slate-900">Recent Evaluations</h2>
-                    </div>
-
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-slate-200 text-sm">
-                            <thead className="bg-slate-50">
-                                <tr>
-                                    <th className="px-5 py-3 text-left font-semibold text-slate-600">Instructor</th>
-                                    <th className="px-5 py-3 text-left font-semibold text-slate-600">Course</th>
-                                    <th className="px-5 py-3 text-left font-semibold text-slate-600">Rating</th>
-                                    <th className="px-5 py-3 text-left font-semibold text-slate-600">Submitted</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-200 bg-white">
-                                {recentEvaluations.length > 0 ? (
-                                    recentEvaluations.map((row) => (
-                                        <tr key={`${row.instructor}-${row.course_code}-${row.submitted_at}`}>
-                                            <td className="px-5 py-3 text-slate-900 font-medium">{row.instructor}</td>
-                                            <td className="px-5 py-3 text-slate-700">{row.course_code} - {row.course_title}</td>
-                                            <td className="px-5 py-3 text-slate-700">{row.rating_percentage}%</td>
-                                            <td className="px-5 py-3 text-slate-700">{row.submitted_at}</td>
-                                        </tr>
-                                    ))
-                                ) : (
-                                    <tr>
-                                        <td colSpan={4} className="px-5 py-8 text-center text-slate-500">
-                                            No evaluations submitted yet.
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
                     </div>
                 </section>
             </main>

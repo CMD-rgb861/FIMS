@@ -27,6 +27,7 @@ export default function AccountSettingsPage({
     oldInput = {},
     user = null,
     hasPendingEvaluations = false,
+    canAccessEvaluation = true,
 }) {
     const resolvedForm = useMemo(() => ({
         email: oldInput?.email ?? user?.email ?? '',
@@ -67,6 +68,7 @@ export default function AccountSettingsPage({
                 logoutUrl={logoutUrl}
                 csrfToken={csrfToken}
                 hasPendingEvaluations={hasPendingEvaluations}
+                canAccessEvaluation={canAccessEvaluation}
             />
 
             <main className="flex-1 p-6">

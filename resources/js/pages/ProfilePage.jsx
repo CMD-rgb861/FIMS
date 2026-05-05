@@ -27,6 +27,7 @@ export default function ProfilePage({
     oldInput = {},
     user = null,
     hasPendingEvaluations = false,
+    canAccessEvaluation = true,
 }) {
     const resolvedUser = useMemo(() => ({
         id_no: oldInput?.id_no ?? user?.id_no ?? '',
@@ -92,6 +93,7 @@ export default function ProfilePage({
                 logoutUrl={logoutUrl}
                 csrfToken={csrfToken}
                 hasPendingEvaluations={hasPendingEvaluations}
+                canAccessEvaluation={canAccessEvaluation}
             />
 
             <main className="flex-1 p-6">

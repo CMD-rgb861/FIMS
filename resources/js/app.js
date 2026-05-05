@@ -7,6 +7,7 @@ import AccountSettingsPage from './pages/AccountSettingsPage';
 import SubjectsPage from './pages/SubjectsPage';
 import ReportsPage from './pages/ReportsPage';
 import FacultyReportPage from './pages/FacultyReportPage';
+import GradesPage from './pages/GradesPage';
 
 const dashboardRoot = document.getElementById('dashboard-root');
 const evaluationRoot = document.getElementById('evaluation-root');
@@ -15,6 +16,7 @@ const accountSettingsRoot = document.getElementById('account-settings-root');
 const subjectsRoot = document.getElementById('subjects-root');
 const reportsRoot = document.getElementById('reports-root');
 const facultyReportRoot = document.getElementById('faculty-report-root');
+const gradesRoot = document.getElementById('grades-root');
 
 function parseProps(scriptId) {
 	const propsScript = document.getElementById(scriptId);
@@ -110,6 +112,18 @@ if (facultyReportRoot) {
 			React.StrictMode,
 			null,
 			React.createElement(FacultyReportPage, props)
+		)
+	);
+}
+
+if (gradesRoot) {
+	const props = parseProps('grades-props');
+
+	createRoot(gradesRoot).render(
+		React.createElement(
+			React.StrictMode,
+			null,
+			React.createElement(GradesPage, props)
 		)
 	);
 }

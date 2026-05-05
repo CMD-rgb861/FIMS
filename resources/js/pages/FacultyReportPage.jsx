@@ -15,6 +15,7 @@ export default function FacultyReportPage({
     hasPendingEvaluations = false,
     facultyName = '',
     tableRows = [],
+    canAccessEvaluation = true,
 }) {
     const [isSetModalOpen, setIsSetModalOpen] = useState(false);
     const [setBreakdownRows, setSetBreakdownRows] = useState([]);
@@ -47,6 +48,7 @@ export default function FacultyReportPage({
                 logoutUrl={logoutUrl}
                 csrfToken={csrfToken}
                 hasPendingEvaluations={hasPendingEvaluations}
+                canAccessEvaluation={canAccessEvaluation}
             />
 
             <main className="flex-1 p-6">

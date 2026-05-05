@@ -48,6 +48,11 @@ class AuthenticatedSessionController extends Controller
         Auth::login($user);
         $request->session()->regenerate();
 
+        $isUnitHead = $user->isUnitHead();
+
+        $request->session()->put('fims_id_no', $user->id_no);
+        $request->session()->put('fims_role', $isUnitHead ? 'unit_head' : 'faculty');
+
         return redirect()->intended(route('dashboard'));
     }
 

@@ -16,6 +16,7 @@ export default function ReportsPage({
     reportSummary = [],
     recentReports = [],
     facultyList = [],
+    canAccessEvaluation = true,
 }) {
     return (
         <div className="min-h-screen flex bg-slate-50 text-slate-900">
@@ -32,6 +33,7 @@ export default function ReportsPage({
                 logoutUrl={logoutUrl}
                 csrfToken={csrfToken}
                 hasPendingEvaluations={hasPendingEvaluations}
+                canAccessEvaluation={canAccessEvaluation}
             />
 
             <main className="flex-1 p-6">
