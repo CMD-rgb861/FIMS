@@ -8,9 +8,13 @@ use Illuminate\Http\Request;
 
 class FacultyEvaluationController extends Controller
 {
+    
     public function store(Request $request): JsonResponse
     {
-        $canAccessEvaluation = $request->user()->isUnitHead();
+        $user = $request->user();
+        $canAccessEvaluation = method_exists($user, 'canEvaluateFaculty')
+            ? $user->canEvaluateFaculty()
+            : $user->isUnitHead();
 
         abort_if(! $canAccessEvaluation, 403);
 

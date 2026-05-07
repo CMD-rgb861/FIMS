@@ -28,6 +28,8 @@ export default function EvaluationPage({
     reportsUrl = '/reports',
     canAccessEvaluation = true,
 }) {
+    const role = String(user?.role ?? '').toLowerCase();
+    const isAdmin = role === 'admin' || user?.isAdmin === true;
     const [isEvaluationOpen, setIsEvaluationOpen] = useState(false);
     const [selectedEvaluation, setSelectedEvaluation] = useState(null);
     const [isResultOpen, setIsResultOpen] = useState(false);
@@ -107,7 +109,19 @@ export default function EvaluationPage({
 
                 <div className="p-6">
                     <div>
-                        <h1 className="text-2xl font-semibold tracking-tight">Supervisor's Evaluation of Faculty (SEF)</h1>
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <h1 className="text-2xl font-semibold tracking-tight">Supervisor's Evaluation of Faculty (SEF)</h1>
+                            {isAdmin ? (
+                                <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                                    Admin view
+                                </span>
+                            ) : null}
+                        </div>
+                        <p className="mt-2 max-w-3xl text-sm text-slate-500">
+                            {isAdmin
+                                ? 'Administrator accounts can view the page layout, but evaluation actions remain governed by Unit Head access.'
+                                : 'Use this page to review faculty entries and submit evaluations during the active schedule.'}
+                        </p>
                     </div>
 
                     <div className="mt-6 flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
@@ -195,6 +209,10 @@ export default function EvaluationPage({
                                             {item.evaluated ? (
                                                 <span className="inline-flex items-center rounded-md bg-emerald-100 px-3 py-1.5 text-xs font-semibold text-emerald-700">
                                                     Evaluated
+                                                </span>
+                                            ) : isEvaluationClosed ? (
+                                                <span className="inline-flex items-center rounded-md bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800">
+                                                    Closed Evaluation
                                                 </span>
                                             ) : (
                                                 <span className="inline-flex items-center rounded-md bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-700">

@@ -7,24 +7,24 @@ use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
-class ITFacultyUserSeeder extends Seeder
+class AdminUserSeeder extends Seeder
 {
     use WithoutModelEvents;
 
     /**
-     * Seed a sample IT Faculty user for local testing.
+     * Seed a default Admin account for local testing.
      */
     public function run(): void
     {
         User::query()->updateOrCreate(
-            ['id_no' => 'ITF-0001'],
+            ['id_no' => 'ADMIN-0001'],
             [
-                'lastname' => 'Faculty',
-                'firstname' => 'IT',
+                'lastname' => 'Administrator',
+                'firstname' => 'System',
                 'middlename' => null,
                 'extname' => null,
-                'role' => User::ROLE_FACULTY,
-                'password' => Hash::make('Faculty@123'),
+                'role' => User::ROLE_ADMIN,
+                'password' => Hash::make('Admin@123'),
             ]
         );
     }

@@ -20,6 +20,12 @@ export default function Sidebar({
     const initial = (user?.firstname?.[0] ?? 'U').toUpperCase();
     const appLabel = appName || 'FIMS';
     const profilePhotoUrl = user?.profile_photo_url ?? '';
+    const role = String(user?.role ?? '').toLowerCase();
+    const roleLabel = role === 'admin'
+        ? 'Admin'
+        : role === 'unit_head'
+            ? 'Unit Head'
+            : 'Faculty';
 
     const navClass = (key) => (
         activePage === key
@@ -151,6 +157,9 @@ export default function Sidebar({
                     <div className="min-w-0">
                         <div className="text-sm font-semibold truncate">{fullName}</div>
                         <div className="text-xs text-slate-500 truncate">{user?.id_no ?? 'N/A'}</div>
+                        <div className="mt-1 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                            {roleLabel}
+                        </div>
                     </div>
                     <form method="POST" action={logoutUrl} className="ml-auto">
                         <input type="hidden" name="_token" value={csrfToken} />

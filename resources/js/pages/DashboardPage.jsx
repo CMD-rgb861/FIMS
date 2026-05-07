@@ -18,6 +18,8 @@ export default function DashboardPage({
     hasPendingEvaluations = false,
     canAccessEvaluation = true,
 }) {
+    const role = String(user?.role ?? '').toLowerCase();
+    const isAdmin = role === 'admin' || user?.isAdmin === true;
     const isUnitHead = user?.isUnitHead ?? false;
     const gradeCard = gradeSummaryCards.find(
         (card) =>
@@ -31,9 +33,15 @@ export default function DashboardPage({
 
     const summaryCards = [
         {
-            label: isUnitHead ? 'Unit Head Grade' : 'Faculty Grade',
+            label: isAdmin ? 'Admin Access' : isUnitHead ? 'Unit Head Grade' : 'Faculty Grade',
             value: gradeCard?.value ?? 'N/A',
-            helper: gradeCard?.helper ?? (isUnitHead ? 'No grade issued yet.' : 'No grade received yet.'),
+            helper: gradeCard?.helper ?? (
+                isAdmin
+                    ? 'System administration access is enabled.'
+                    : isUnitHead
+                        ? 'No grade issued yet.'
+                        : 'No grade received yet.'
+            ),
         },
         {
             label: 'Evaluation',
@@ -69,10 +77,18 @@ export default function DashboardPage({
                 <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-slate-950 px-6 py-7 text-white shadow-xl shadow-slate-900/10 sm:px-8">
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(125,211,252,0.24),_transparent_38%),radial-gradient(circle_at_bottom_left,_rgba(148,163,184,0.18),_transparent_35%)]" />
                     <div className="relative">
-                        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-200/90">Faculty dashboard</p>
-                        <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Your grades, evaluations, and progress in one place.</h1>
+                        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-200/90">
+                            {isAdmin ? 'Admin dashboard' : 'Faculty dashboard'}
+                        </p>
+                        <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+                            {isAdmin
+                                ? 'Manage the system and review operational status in one place.'
+                                : 'Your grades, evaluations, and progress in one place.'}
+                        </h1>
                         <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
-                            Track the grades issued by your unit head, review recent evaluation activity, and quickly see where you stand for the current term.
+                            {isAdmin
+                                ? 'This account is recognized as an administrator. Evaluation pages are still Unit Head-only unless you add admin access rules.'
+                                : 'Track the grades issued by your unit head, review recent evaluation activity, and quickly see where you stand for the current term.'}
                         </p>
                         <div className="mt-6 grid gap-3 sm:grid-cols-3">
                             {summaryCards.map((card) => (
