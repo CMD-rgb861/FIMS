@@ -211,7 +211,7 @@ export default function EvaluationPage({
                                                     Evaluated
                                                 </span>
                                             ) : isEvaluationClosed ? (
-                                                <span className="inline-flex items-center rounded-md bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800">
+                                                <span className="inline-flex items-center rounded-md bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-700">
                                                     Closed Evaluation
                                                 </span>
                                             ) : (
