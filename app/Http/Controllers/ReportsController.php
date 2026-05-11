@@ -102,6 +102,7 @@ class ReportsController extends Controller
                 'firstname' => $currentUser?->firstname,
                 'lastname' => $currentUser?->lastname,
                 'profile_photo_url' => $profilePhotoUrl,
+                'role' => $currentUser?->role,
             ],
             'reportSummary' => [
                 [
@@ -242,6 +243,7 @@ class ReportsController extends Controller
                 'firstname' => $currentUser?->firstname,
                 'lastname' => $currentUser?->lastname,
                 'profile_photo_url' => $profilePhotoUrl,
+                'role' => $currentUser?->role,
             ],
             'facultyName' => $facultyMeta['instructor'],
             'tableRows' => $tableRows,
