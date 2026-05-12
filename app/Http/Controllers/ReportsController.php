@@ -13,8 +13,8 @@ class ReportsController extends Controller
 
     public function index(Request $request)
     {
-        $facultyEvaluations = $this->getFacultyEvaluations();
         $currentUser = $request->user();
+        $facultyEvaluations = $this->getFacultyEvaluations($currentUser);
         $canAccessEvaluation = $this->canAccessEvaluationForUser($currentUser);
         $profilePhotoUrl = $currentUser?->personalInformation?->profile_photo_path
             ? asset('storage/' . $currentUser->personalInformation->profile_photo_path)
@@ -137,8 +137,8 @@ class ReportsController extends Controller
 
     public function faculty(Request $request, string $instructor)
     {
-        $facultyEvaluations = $this->getFacultyEvaluations();
         $currentUser = $request->user();
+        $facultyEvaluations = $this->getFacultyEvaluations($currentUser);
         $canAccessEvaluation = $this->canAccessEvaluationForUser($currentUser);
         $profilePhotoUrl = $currentUser?->personalInformation?->profile_photo_path
             ? asset('storage/' . $currentUser->personalInformation->profile_photo_path)
@@ -159,6 +159,32 @@ class ReportsController extends Controller
             ->where('instructor', $facultyMeta['instructor'])
             ->latest('submitted_at')
             ->get();
+
+
+            //GET ALL THE SUBJECTS FROM ENROLLMENT COURSES TABLE FOR THIS INSTRUCTOR; ADD FILTERS HERE LATER (PROGRAM/TERM/STATUS)
+        $latestSubmissionByCourse = $facultySubmissions
+            ->unique(function ($submission) {
+                return (string) ($submission->course_code ?? '');
+            })
+            ->keyBy(function ($submission) {
+                return (string) ($submission->course_code ?? '');
+            });
+
+        $latestGradesByCourse = UnitHeadGrade::query()
+            ->where('user_id', $currentUser->id)
+            ->where('instructor', $facultyMeta['instructor'])
+            ->latest('submitted_at')
+            ->get()
+            ->unique(function ($grade) {
+                return (string) ($grade->course_code ?? '');
+            })
+            ->keyBy(function ($grade) {
+                return (string) ($grade->course_code ?? '');
+            });
+            //END
+
+
+
 
         $setBreakdown = $facultySubmissions
             ->values()
@@ -190,32 +216,47 @@ class ReportsController extends Controller
             })
             ->all();
 
-        $tableRows = $facultySubmissions
-            ->map(function ($submission) use ($employeeIdNo, $facultyMeta, $setBreakdown) {
-                $ratings = $submission->ratings ?? [];
+        // Show all assigned subjects for this instructor; add filters here later (program/term/status).
+        $allSubjects = collect($facultyMeta['subjects'] ?? [])->values();
+
+        $tableRows = $allSubjects
+            ->map(function ($subject, $index) use ($employeeIdNo, $facultyMeta, $latestSubmissionByCourse, $latestGradesByCourse) {
+                $courseCode = (string) ($subject['code'] ?? '');
+                $submission = $latestSubmissionByCourse->get($courseCode);
+                $grade = $latestGradesByCourse->get($courseCode);
+
+                $ratings = $submission?->ratings ?? [];
                 $totalScore = collect($ratings)->sum(function ($score) {
                     return (int) $score;
                 });
 
-                $sefScore = round(($totalScore / 75) * 100, 2);
-
-                $setGrade = UnitHeadGrade::query()
-                    ->where('user_id', $submission->user_id)
-                    ->where('instructor', $submission->instructor)
-                    ->where('course_code', $submission->course_code)
-                    ->latest('submitted_at')
-                    ->value('grade');
-
-                $status = $setGrade !== null ? 'Evaluated' : 'For Evaluation';
+                $sefScore = $submission ? round(($totalScore / 75) * 100, 2) : null;
+                $setGrade = $grade?->grade;
+                $status = ($setGrade !== null || $submission !== null) ? 'Evaluated' : 'For Evaluation';
+                $term = $subject['term'] ?? '-';
+                $setBreakdown = [
+                    [
+                        'seq' => 1,
+                        'course_code' => $courseCode,
+                        'year_section' => $term,
+                        'no_of_students' => null,
+                        'average_set_rating' => $setGrade !== null ? number_format((float) $setGrade, 2) : '-',
+                        'weighted_set_score' => '-',
+                        'no_of_students_value' => null,
+                        'average_set_rating_value' => $setGrade !== null ? (float) $setGrade : null,
+                        'weighted_set_score_value' => null,
+                    ],
+                ];
 
                 return [
-                    'id' => $submission->id,
+                    'id' => $index + 1,
+                    'course_description' => $subject['course_description'] ?? $subject['title'] ?? '-',
                     'employee_id_no' => $employeeIdNo,
                     'employee_name' => $facultyMeta['instructor'],
                     'set_score' => $setGrade !== null ? number_format((float) $setGrade, 2) : '-',
-                    'sef_score' => number_format($sefScore, 2) . '%',
-                    'sef_total_score' => $totalScore,
-                    'sef_rating' => number_format($sefScore, 2) . '%',
+                    'sef_score' => $sefScore !== null ? number_format($sefScore, 2) . '%' : '-',
+                    'sef_total_score' => $sefScore !== null ? $totalScore : null,
+                    'sef_rating' => $sefScore !== null ? number_format($sefScore, 2) . '%' : '-',
                     'status' => $status,
                     'action_url' => route('evaluation', [
                         'subject' => $facultyMeta['instructor'],

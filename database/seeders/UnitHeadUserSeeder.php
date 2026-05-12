@@ -66,7 +66,6 @@ class UnitHeadUserSeeder extends Seeder
                     'firstname' => $collegeData['shorten'],
                     'middlename' => null,
                     'extname' => null,
-                    'role' => User::ROLE_UNIT_HEAD,
                     'password' => Hash::make('UnitHead@123'),
                 ]
             );

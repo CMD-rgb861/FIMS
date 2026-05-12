@@ -3,13 +3,16 @@
 namespace App\Http\Controllers\Traits;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 trait FacultyData
 {
-    protected function getFacultyEvaluations(): array
+    protected function getFacultyEvaluations($user = null): array
     {
         try {
             $rows = DB::connection('lnu_poes')->table('enrollment_courses')->get();
+
+            $allowedProgramIds = $this->getAllowedProgramIdsForUser($user);
 
             if ($rows->isEmpty()) {
                 return [];
@@ -19,6 +22,14 @@ trait FacultyData
 
             foreach ($rows as $row) {
                 $row = (array) $row;
+
+                if (! empty($allowedProgramIds)) {
+                    $programId = isset($row['program_id']) ? (int) $row['program_id'] : null;
+
+                    if ($programId === null || ! in_array($programId, $allowedProgramIds, true)) {
+                        continue;
+                    }
+                }
 
                 $instructor = $row['instructor'] ?? $row['instructor_name'] ?? $row['faculty_name'] ?? $row['name'] ?? null;
 
@@ -67,7 +78,7 @@ trait FacultyData
                 }
 
                 $code = $row['course_code'] ?? $row['subject_code'] ?? $row['subj_code'] ?? $row['code'] ?? ($row['course'] ?? '');
-                $title = $row['course_title'] ?? $row['subject_title'] ?? $row['title'] ?? $row['description'] ?? '';
+                $title = $row['course_description'] ?? $row['course_title'] ?? $row['subject_title'] ?? $row['title'] ?? $row['description'] ?? '';
 
                 if (isset($row['school_year_from'], $row['school_year_to'], $row['semester'])) {
                     $term = sprintf('S.Y. %s-%s - %s', $row['school_year_from'], $row['school_year_to'], $row['semester']);
@@ -98,12 +109,52 @@ trait FacultyData
                 $instructors[$instructor]['subjects'][] = [
                     'code' => $code ?? '',
                     'title' => $title ?? '',
+                    'course_description' => $row['course_description'] ?? ($title ?? ''),
                     'term' => $term,
                     'id_no' => $row['id_no'] ?? $row['employee_id_no'] ?? $row['instr_id_no'] ?? $row['instructor_id_no'] ?? null,
                 ];
             }
 
             return array_values($instructors);
+        } catch (\Exception $e) {
+            return [];
+        }
+    }
+
+    protected function getAllowedProgramIdsForUser($user): array
+    {
+        if ($user === null || ! method_exists($user, 'isDean') || ! $user->isDean()) {
+            return [];
+        }
+
+        $collegeId = $user->college_id ?? null;
+
+        if ($collegeId === null) {
+            return [];
+        }
+
+        try {
+            if (! Schema::connection('lnu_poes')->hasTable('programs')) {
+                return [];
+            }
+
+            $columns = Schema::connection('lnu_poes')->getColumnListing('programs');
+
+            if (! in_array('college_id', $columns, true)) {
+                return [];
+            }
+
+            return DB::connection('lnu_poes')->table('programs')
+                ->where('college_id', $collegeId)
+                ->pluck('id')
+                ->map(function ($id) {
+                    return (int) $id;
+                })
+                ->filter(function ($id) {
+                    return $id > 0;
+                })
+                ->values()
+                ->all();
         } catch (\Exception $e) {
             return [];
         }

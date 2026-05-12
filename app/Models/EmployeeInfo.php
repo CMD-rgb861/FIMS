@@ -6,14 +6,23 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class UnitHead extends Model
+class EmployeeInfo extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'unit_id',
         'user_id',
+        'unit_id',
+        'position',
+        'salary',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'salary' => 'decimal:2',
+        ];
+    }
 
     public function user(): BelongsTo
     {

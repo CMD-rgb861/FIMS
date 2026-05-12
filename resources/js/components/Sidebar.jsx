@@ -25,7 +25,9 @@ export default function Sidebar({
         ? 'Admin'
         : role === 'unit_head'
             ? 'Unit Head'
-            : 'Faculty';
+            : role === 'dean'
+                ? 'Dean'
+                : 'Faculty';
 
     const navClass = (key) => (
         activePage === key
@@ -163,7 +165,10 @@ export default function Sidebar({
                     </div>
                     <form method="POST" action={logoutUrl} className="ml-auto">
                         <input type="hidden" name="_token" value={csrfToken} />
-                        <button type="submit" className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                        <button
+                            type="submit"
+                            className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                        >
                             Logout
                         </button>
                     </form>

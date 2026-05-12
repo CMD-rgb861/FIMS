@@ -23,7 +23,6 @@ class ITFacultyUserSeeder extends Seeder
                 'firstname' => 'IT',
                 'middlename' => null,
                 'extname' => null,
-                'role' => User::ROLE_FACULTY,
                 'password' => Hash::make('Faculty@123'),
             ]
         );

@@ -190,7 +190,7 @@ class EvaluationController extends Controller
                 'profile_photo_url' => $profilePhotoUrl,
                 'role' => method_exists($currentUser, 'resolveRole') ? $currentUser->resolveRole() : null,
                 'isAdmin' => method_exists($currentUser, 'isAdmin') ? $currentUser->isAdmin() : false,
-                'isUnitHead' => method_exists($currentUser, 'isUnitHead') ? $currentUser->isUnitHead() : $canAccessEvaluation,
+                'isUnitHead' => $canAccessEvaluation,
             ],
             'schoolYears' => $schoolYears,
             'terms' => $terms,

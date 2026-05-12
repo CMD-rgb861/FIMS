@@ -2,16 +2,13 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class UnitHead extends Model
+class Dean extends Model
 {
-    use HasFactory;
-
     protected $fillable = [
-        'unit_id',
+        'college_id',
         'user_id',
     ];
 
@@ -20,8 +17,8 @@ class UnitHead extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function unit(): BelongsTo
+    public function college(): BelongsTo
     {
-        return $this->belongsTo(Unit::class);
+        return $this->belongsTo(College::class);
     }
 }

@@ -228,8 +228,7 @@ class ProfileController extends Controller
 
     private function canAccessEvaluation(string $idNo): bool
     {
-        return User::query()
-            ->where('id_no', $idNo)
-            ->first()?->isUnitHead() === true;
+        $user = User::query()->where('id_no', $idNo)->first();
+        return $user && method_exists($user, 'canEvaluateFaculty') ? $user->canEvaluateFaculty() : false;
     }
 }

@@ -49,8 +49,8 @@ export default function ReportsPage({
                         <table className="min-w-full divide-y divide-slate-200 text-sm">
                             <thead className="bg-slate-50">
                                 <tr>
-                                    <th className="px-5 py-3 text-left font-semibold text-slate-600">ID</th>
                                     <th className="px-5 py-3 text-left font-semibold text-slate-600">Employee ID No</th>
+                                    <th className="px-5 py-3 text-left font-semibold text-slate-600">Subject</th>
                                     <th className="px-5 py-3 text-left font-semibold text-slate-600">Employee Name</th>
                                     <th className="px-5 py-3 text-left font-semibold text-slate-600">SET</th>
                                     <th className="px-5 py-3 text-left font-semibold text-slate-600">SEF</th>
@@ -62,8 +62,8 @@ export default function ReportsPage({
                                 {recentReports.length > 0 ? (
                                     recentReports.map((report, index) => (
                                         <tr key={index}>
-                                            <td className="px-5 py-3 text-slate-900 font-medium">{index + 1}</td>
                                             <td className="px-5 py-3 text-slate-700">-</td>
+                                            <td className="px-5 py-3 text-slate-700">{report.subject}</td>
                                             <td className="px-5 py-3 text-slate-700">{report.instructor}</td>
                                             <td className="px-5 py-3 text-slate-700">{report.final_grade || '-'}</td>
                                             <td className="px-5 py-3 text-slate-700">{report.rating_percentage}%</td>
