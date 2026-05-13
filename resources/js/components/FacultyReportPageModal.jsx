@@ -1,3 +1,5 @@
+//INDIVIDUAL FACULTY REPORT BREAKDOWN MODAL COMPONENT
+
 export default function FacultyReportPageModal({
     isOpen,
     onClose,

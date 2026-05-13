@@ -116,9 +116,11 @@ export default function ReportsPage({
                                                     <div className="text-sm font-semibold text-slate-900 truncate">{faculty.instructor}</div>
                                                     <div className="text-xs text-slate-500">Employee ID No: {faculty.employee_id_no}</div>
                                                     <div className="text-xs text-slate-500">Subjects: {faculty.subjects_count}</div>
-                                                    <div className="text-xs text-slate-500">
+                                                    {/* <div className="text-xs text-slate-500">
                                                         {faculty.evaluated ? 'With Evaluation' : 'Without Evaluation'}
-                                                    </div>
+                                                    </div> */}
+                                                     <div className="text-xs text-slate-500">Overall SET Rating: {faculty.overall_set_rating !== null ? `${faculty.overall_set_rating}%` : '-'}</div>
+                                                     <div className="text-xs text-slate-500">Overall SEF Rating: {faculty.overall_sef_rating !== null ? `${faculty.overall_sef_rating}%` : '-'}</div>
                                                 </div>
                                             </div>
                                         </div>

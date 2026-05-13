@@ -8,6 +8,7 @@ use App\Http\Controllers\SubjectsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EvaluationController;
 use App\Http\Controllers\GradesController;
+use App\Http\Controllers\ReportEvaluationController;
 use App\Http\Controllers\ReportsController;
 use Illuminate\Support\Facades\Route;
 
@@ -37,6 +38,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports', [ReportsController::class, 'index'])->name('reports');
 
     Route::get('/reports/faculty/{instructor}', [ReportsController::class, 'faculty'])->name('reports.faculty');
+    Route::get('/reports/faculty/{instructor}/breakdown', [ReportEvaluationController::class, 'breakdown'])->name('reports.faculty.breakdown');
 
     Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
     Route::post('/evaluations', [FacultyEvaluationController::class, 'store'])->name('evaluations.store');

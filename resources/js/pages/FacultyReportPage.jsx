@@ -104,29 +104,38 @@ export default function FacultyReportPage({
                     <table className="min-w-full divide-y divide-slate-200 text-sm">
                         <thead className="bg-slate-50">
                             <tr>
+
+                                <th className="px-5 py-3 text-left font-semibold text-slate-600">
+                                    Course Code
+                                </th>
+
                                 <th className="px-5 py-3 text-left font-semibold text-slate-600">
                                     Subject
                                 </th>
 
                                 <th className="px-5 py-3 text-left font-semibold text-slate-600">
-                                    Employee ID No
+                                    Year/Section
                                 </th>
+
+                                {/* <th className="px-5 py-3 text-left font-semibold text-slate-600">
+                                    Employee ID No
+                                </th> */}
 
                                 <th className="px-5 py-3 text-left font-semibold text-slate-600">
                                     Employee Name
                                 </th>
 
-                                <th className="px-5 py-3 text-left font-semibold text-slate-600">
+                                {/* <th className="px-5 py-3 text-left font-semibold text-slate-600">
                                     SET
                                 </th>
 
                                 <th className="px-5 py-3 text-left font-semibold text-slate-600">
                                     SEF
-                                </th>
+                                </th> */}
 
-                                <th className="px-5 py-3 text-left font-semibold text-slate-600">
+                                {/* <th className="px-5 py-3 text-left font-semibold text-slate-600">
                                     Status
-                                </th>
+                                </th> */}
 
                                 <th className="px-5 py-3 text-left font-semibold text-slate-600">
                                     Action
@@ -138,27 +147,36 @@ export default function FacultyReportPage({
                             {tableRows.length > 0 ? (
                                 tableRows.map((row) => (
                                     <tr key={row.id}>
+
+                                        <td className="px-5 py-3 text-slate-700">
+                                            {row.course_code || '-'}
+                                        </td>
+
                                         <td className="px-5 py-3 text-slate-900 font-medium">
                                             {row.course_description || '-'}
                                         </td>
-
+                                        
                                         <td className="px-5 py-3 text-slate-700">
-                                            {row.employee_id_no}
+                                            {row.year_section || '-'}
                                         </td>
+
+                                        {/* <td className="px-5 py-3 text-slate-700">
+                                            {row.employee_id_no}
+                                        </td> */}
 
                                         <td className="px-5 py-3 text-slate-700">
                                             {row.employee_name}
                                         </td>
 
-                                        <td className="px-5 py-3 text-slate-700">
+                                        {/* <td className="px-5 py-3 text-slate-700">
                                             {row.set_score}
                                         </td>
 
                                         <td className="px-5 py-3 text-slate-700">
                                             {row.sef_score}
-                                        </td>
+                                        </td> */}
 
-                                        <td className="px-5 py-3">
+                                        {/* <td className="px-5 py-3">
                                             <span
                                                 className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-semibold ${
                                                     row.status === 'Evaluated'
@@ -168,7 +186,7 @@ export default function FacultyReportPage({
                                             >
                                                 {row.status}
                                             </span>
-                                        </td>
+                                        </td> */}
 
                                         <td className="px-5 py-3">
                                             <button
@@ -184,7 +202,7 @@ export default function FacultyReportPage({
                             ) : (
                                 <tr>
                                     <td
-                                        colSpan={7}
+                                        colSpan={9}
                                         className="px-5 py-8 text-center text-slate-500"
                                     >
                                         No evaluation records found for this

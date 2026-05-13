@@ -3,8 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Traits\FacultyData;
+use App\Models\Poes\PoesEvalSubmissions;
 use App\Models\SupervisorEvaluationSubmission;
 use App\Models\UnitHeadGrade;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 
 class ReportsController extends Controller
@@ -14,7 +17,7 @@ class ReportsController extends Controller
     public function index(Request $request)
     {
         $currentUser = $request->user();
-        $facultyEvaluations = $this->getFacultyEvaluations($currentUser);
+        $facultyEvaluations = $this->getLocalFacultyUsers($currentUser);
         $canAccessEvaluation = $this->canAccessEvaluationForUser($currentUser);
         $profilePhotoUrl = $currentUser?->personalInformation?->profile_photo_path
             ? asset('storage/' . $currentUser->personalInformation->profile_photo_path)
@@ -75,13 +78,82 @@ class ReportsController extends Controller
 
         $facultyList = collect($facultyEvaluations)
             ->map(function ($faculty, $index) use ($evaluatedInstructors) {
+                /*
+                |----------------------------------------
+                | OVERALL SET RATING FOR FACULTY CARD
+                | Calculates aggregate SET rating across all subjects
+                | Only calculate if faculty has assigned subjects
+                |----------------------------------------
+                */
+                $overallSetRating = null;
+                $overallSefRating = null;
+                $subjectsCount = count($faculty['subjects'] ?? []);
+
+                // Only calculate ratings if faculty has subjects
+                if ($subjectsCount > 0) {
+                    // Extract numeric ID from id_no (same way as in faculty detail page)
+                    $instructorIdRaw = $faculty['id_no'] ?? null;
+                    $instructorId = null;
+
+                    if ($instructorIdRaw !== null) {
+                        $digits = preg_replace('/\D+/', '', (string) $instructorIdRaw);
+                        if ($digits !== '') {
+                            $instructorId = (int) $digits;
+                        }
+                    }
+
+                    if ($instructorId !== null) {
+                        // Calculate SET rating from PoesEvalSubmissions
+                        // Try both numeric ID and full id_no string
+                        $totalEvaluators = PoesEvalSubmissions::query()
+                            ->where('instructor_id', $instructorId)
+                            ->orWhere('instructor_id', $instructorIdRaw)
+                            ->distinct('student_id_number')
+                            ->count('student_id_number');
+
+                        $totalWeightedScoreQuery = PoesEvalSubmissions::query()
+                            ->where(function ($q) use ($instructorId, $instructorIdRaw) {
+                                $q->where('instructor_id', $instructorId)
+                                  ->orWhere('instructor_id', $instructorIdRaw);
+                            });
+
+                        $totalWeightedScore = $totalWeightedScoreQuery
+                            ->selectRaw('COUNT(DISTINCT student_id_number) as evaluators')
+                            ->selectRaw('AVG(total_score) as avg_score')
+                            ->first();
+
+                        if ($totalWeightedScore && $totalEvaluators > 0 && $totalWeightedScore->avg_score !== null) {
+                            $weightedScore = $totalWeightedScore->avg_score * $totalEvaluators;
+                            $overallSetRating = round(($weightedScore / $totalEvaluators), 2);
+                        }
+                    }
+
+                    // Calculate SEF rating from SupervisorEvaluationSubmission
+                    $sefSubmissions = SupervisorEvaluationSubmission::query()
+                        ->where('user_id', $faculty['user_id'])
+                        ->get();
+
+                    if ($sefSubmissions->count() > 0) {
+                        $averageSefRating = round($sefSubmissions->avg(function ($submission) {
+                            $ratings = $submission->ratings ?? [];
+                            $totalScore = collect($ratings)->sum(function ($score) {
+                                return (int) $score;
+                            });
+                            return ($totalScore / 75) * 100;
+                        }), 2);
+                        $overallSefRating = $averageSefRating;
+                    }
+                }
+
                 return [
                     'initials' => $faculty['initials'],
                     'instructor' => $faculty['instructor'],
-                    'subjects_count' => count($faculty['subjects'] ?? []),
+                    'subjects_count' => $subjectsCount,
                     'evaluated' => $evaluatedInstructors->contains($faculty['instructor']),
-                    'employee_id_no' => 'EMP-' . str_pad((string) ($index + 1), 3, '0', STR_PAD_LEFT),
+                    'employee_id_no' => $faculty['id_no'] ?? 'EMP-' . str_pad((string) ($index + 1), 3, '0', STR_PAD_LEFT),
                     'detail_url' => route('reports.faculty', ['instructor' => $faculty['instructor']]),
+                    'overall_set_rating' => $overallSetRating,
+                    'overall_sef_rating' => $overallSefRating,
                 ];
             })
             ->values()
@@ -138,7 +210,7 @@ class ReportsController extends Controller
     public function faculty(Request $request, string $instructor)
     {
         $currentUser = $request->user();
-        $facultyEvaluations = $this->getFacultyEvaluations($currentUser);
+        $facultyEvaluations = $this->getLocalFacultyUsers($currentUser);
         $canAccessEvaluation = $this->canAccessEvaluationForUser($currentUser);
         $profilePhotoUrl = $currentUser?->personalInformation?->profile_photo_path
             ? asset('storage/' . $currentUser->personalInformation->profile_photo_path)
@@ -152,7 +224,7 @@ class ReportsController extends Controller
         abort_if($facultyIndex === false, 404);
 
         $facultyMeta = $facultyCollection->get($facultyIndex);
-        $employeeIdNo = 'EMP-' . str_pad((string) ($facultyIndex + 1), 3, '0', STR_PAD_LEFT);
+        $employeeIdNo = $facultyMeta['id_no'] ?? 'EMP-' . str_pad((string) ($facultyIndex + 1), 3, '0', STR_PAD_LEFT);
 
         $facultySubmissions = SupervisorEvaluationSubmission::query()
             ->where('user_id', $currentUser->id)
@@ -222,6 +294,17 @@ class ReportsController extends Controller
         $tableRows = $allSubjects
             ->map(function ($subject, $index) use ($employeeIdNo, $facultyMeta, $latestSubmissionByCourse, $latestGradesByCourse) {
                 $courseCode = (string) ($subject['code'] ?? '');
+                $subjectId = $subject['subject_id'] ?? $subject['id'] ?? null;
+                $instructorIdRaw = $subject['id_no'] ?? null;
+                $instructorId = null;
+
+                if ($instructorIdRaw !== null) {
+                    $digits = preg_replace('/\D+/', '', (string) $instructorIdRaw);
+                    if ($digits !== '') {
+                        $instructorId = (int) $digits;
+                    }
+                }
+
                 $submission = $latestSubmissionByCourse->get($courseCode);
                 $grade = $latestGradesByCourse->get($courseCode);
 
@@ -253,6 +336,8 @@ class ReportsController extends Controller
                     'course_description' => $subject['course_description'] ?? $subject['title'] ?? '-',
                     'employee_id_no' => $employeeIdNo,
                     'employee_name' => $facultyMeta['instructor'],
+                    'course_code' => $courseCode,
+                    'year_section' => $term,
                     'set_score' => $setGrade !== null ? number_format((float) $setGrade, 2) : '-',
                     'sef_score' => $sefScore !== null ? number_format($sefScore, 2) . '%' : '-',
                     'sef_total_score' => $sefScore !== null ? $totalScore : null,
@@ -263,11 +348,39 @@ class ReportsController extends Controller
                         'term' => 'all',
                     ]),
                     'action_label' => 'View',
+                    'breakdown_url' => route('reports.faculty.breakdown', ['instructor' => $facultyMeta['instructor']]) . '?' . http_build_query([
+                        'instructor_id' => $instructorId,
+                        'subject_id' => $subjectId,
+                        'course_code' => $courseCode,
+                        'year_section' => $term,
+                    ]),
                     'set_breakdown' => $setBreakdown,
                 ];
             })
             ->values()
             ->all();
+
+        /*
+        |----------------------------------------
+        | OVERALL SET RATING CALCULATION
+        | Aggregates evaluators and weighted scores across all subjects
+        | Formula: Total Weighted SET Score / Total Evaluators
+        |----------------------------------------
+        */
+        $totalEvaluators = 0;
+        $totalWeightedScore = 0.0;
+
+        foreach ($tableRows as $row) {
+            $totalEvaluators += $row['no_of_students_value'] ?? 0;
+            $totalWeightedScore += $row['weighted_set_score_value'] ?? 0;
+        }
+
+        $overallSetRating = ($totalEvaluators > 0)
+            ? round(($totalWeightedScore / $totalEvaluators), 2)
+            : null;
+
+            //END
+        
 
         $facultyReportProps = [
             'appName' => config('app.name', 'FIMS'),
@@ -288,6 +401,7 @@ class ReportsController extends Controller
             ],
             'facultyName' => $facultyMeta['instructor'],
             'tableRows' => $tableRows,
+            'overallSetRating' => $overallSetRating,
             'hasPendingEvaluations' => SupervisorEvaluationSubmission::query()
                 ->where('user_id', $currentUser->id)
                 ->distinct('instructor')
@@ -296,5 +410,111 @@ class ReportsController extends Controller
         ];
 
         return view('faculty-report', ['facultyReportProps' => $facultyReportProps]);
+    }
+
+    /**
+     * Get faculty users from local database based on current user's role
+     * - Deans see users in their college
+     * - Unit heads see users in their unit
+     * - Faculty/others see empty list
+     */
+    private function getLocalFacultyUsers($user): array
+    {
+        if (!$user) {
+            return [];
+        }
+
+        $usersQuery = User::query();
+
+        // Filter based on user role
+        if ($user->isDean()) {
+            // prefer the college_id stored on the dean record (deans table)
+            $collegeId = $user->dean?->college_id ?? $user->college_id;
+
+            // if we still don't have a college id, return empty — nothing to filter
+            if ($collegeId === null) {
+                return [];
+            }
+
+            $usersQuery->where('college_id', $collegeId);
+        } elseif ($user->isUnitHead()) {
+            $usersQuery->where('unit_id', $user->unit_id);
+        } else {
+            // Faculty users don't see other faculty in this context
+            return [];
+        }
+
+        $users = $usersQuery->get();
+
+        // Transform to expected faculty structure and attach subjects from external DB
+        return $users->map(function ($localUser) {
+            $firstName = trim((string) ($localUser->firstname ?? ''));
+            $lastName = trim((string) ($localUser->lastname ?? ''));
+            $fullName = trim($firstName . ' ' . $lastName) ?: $localUser->id_no ?? 'Unknown';
+
+            // Generate initials
+            $initials = '';
+            foreach (explode(' ', $fullName) as $word) {
+                if ($word !== '') {
+                    $initials .= strtoupper(mb_substr($word, 0, 1));
+                    if (mb_strlen($initials) >= 3) break;
+                }
+            }
+
+            // fetch subjects from external lnu_poes enrollment_courses table by id_no
+            $subjects = [];
+            try {
+                if (!empty($localUser->id_no)) {
+                    $rows = DB::connection('lnu_poes')
+                        ->table('enrollment_courses')
+                        ->where('id_no', $localUser->id_no)
+                        ->get();
+
+                    $subjects = $rows->map(function ($r) {
+                        $courseCode = $r->course_code ?? $r->code ?? $r->subject_code ?? null;
+                        $courseDescription = $r->course_description ?? $r->course_title ?? $r->title ?? $r->subject_title ?? null;
+                        $yearLevel = trim((string) ($r->year_level ?? ''));
+                        $sectionCode = trim((string) ($r->section_code ?? ''));
+
+                        if ($yearLevel !== '' && $sectionCode !== '') {
+                            $yearSection = 'Year ' . $yearLevel . '-' . $sectionCode;
+                        } elseif ($yearLevel !== '') {
+                            $yearSection = 'Year ' . $yearLevel;
+                        } elseif ($sectionCode !== '') {
+                            $yearSection = $sectionCode;
+                        } else {
+                            $yearSection = $r->year_section ?? $r->term ?? null;
+                        }
+
+                        return [
+                            // explicit fields requested for reporting
+                            'code' => $courseCode,
+                            'year_section' => $yearSection,
+                            'year_level' => $yearLevel !== '' ? $yearLevel : null,
+                            'section_code' => $sectionCode !== '' ? $sectionCode : null,
+                            'subject_id' => $r->subject_id ?? $r->id ?? null,
+
+                            // keep aliases for existing consumers
+                            'course_code' => $courseCode,
+                            'term' => $yearSection,
+                            'title' => $courseDescription,
+                            'course_description' => $courseDescription,
+                            'raw' => (array) $r,
+                        ];
+                    })->values()->all();
+                }
+            } catch (\Exception $e) {
+                // if external DB is unavailable, leave subjects empty
+                $subjects = [];
+            }
+
+            return [
+                'initials' => $initials ?: 'N/A',
+                'instructor' => $fullName,
+                'subjects' => $subjects,
+                'user_id' => $localUser->id,
+                'id_no' => $localUser->id_no,
+            ];
+        })->values()->all();
     }
 }
