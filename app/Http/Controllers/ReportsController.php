@@ -388,9 +388,24 @@ class ReportsController extends Controller
             ->table('school_years')
             ->select(
                 'id as value',
-                DB::raw("CONCAT(school_year_from, '-', school_year_to, ' - Semester ', semester) as label")
+                DB::raw("
+                    CONCAT(
+                        school_year_from,
+                        '-',
+                        school_year_to,
+                        ' - ',
+                        CASE
+                            WHEN semester = 1 THEN '1st Semester'
+                            WHEN semester = 2 THEN '2nd Semester'
+                            WHEN semester = 3 THEN 'Summer'
+                            ELSE CONCAT('Semester ', semester)
+                        END
+                    ) as label
+                ")
             )
-            ->orderByDesc('id')
+            ->orderByDesc('school_year_to')
+            ->orderByDesc('school_year_from')
+            ->orderByDesc('semester')
             ->get()
             ->toArray();
 
