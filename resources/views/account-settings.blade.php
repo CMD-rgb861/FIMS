@@ -15,6 +15,8 @@
     </head>
     <body class="min-h-screen bg-slate-50 text-slate-900">
         <div id="account-settings-root"></div>
-        <script id="account-settings-props" type="application/json">@json($accountSettingsProps)</script>
+        <script id="account-settings-props" type="application/json">
+            {!! json_encode($accountSettingsProps, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) !!}
+        </script>
     </body>
 </html>

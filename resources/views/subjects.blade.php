@@ -15,6 +15,8 @@
     </head>
     <body class="min-h-screen bg-slate-50 text-slate-900">
         <div id="subjects-root"></div>
-        <script id="subjects-props" type="application/json">@json($subjectsProps)</script>
+        <script id="subjects-props" type="application/json">
+            {!! json_encode($subjectsProps, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) !!}
+        </script>
     </body>
 </html>

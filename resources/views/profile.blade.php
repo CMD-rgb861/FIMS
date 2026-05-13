@@ -15,6 +15,8 @@
     </head>
     <body class="min-h-screen bg-slate-50 text-slate-900">
         <div id="profile-root"></div>
-        <script id="profile-props" type="application/json">@json($profileProps)</script>
+        <script id="profile-props" type="application/json">
+            {!! json_encode($profileProps, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) !!}
+        </script>
     </body>
 </html>

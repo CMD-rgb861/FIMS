@@ -15,6 +15,8 @@
     </head>
     <body class="min-h-screen bg-slate-50 text-slate-900">
         <div id="dashboard-root"></div>
-        <script id="dashboard-props" type="application/json">@json($dashboardProps)</script>
+        <script id="dashboard-props" type="application/json">
+        @json($dashboardProps, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)
+        </script>
     </body>
 </html>
