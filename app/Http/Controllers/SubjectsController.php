@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Traits\FacultyData;
 use App\Models\UnitHeadGrade;
 use App\Models\Poes\PoesSubjects;
+use Inertia\Inertia;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
@@ -49,7 +50,7 @@ class SubjectsController extends Controller
 
             if ($rows->isEmpty() && $normalizedIdNo !== '') {
                 $rows = PoesSubjects::query()
-                    ->whereRaw('CAST(id_number AS CHAR) = ?', [$normalizedIdNo])
+                    ->whereRaw('CAST(id_number AS CHAR) = ?', [$normalizedIdNo], 'and')
                     ->get();
             }
         } catch (\Exception $e) {
@@ -223,8 +224,8 @@ class SubjectsController extends Controller
             'subjectsUrl' => route('subjects'),
             'evaluationUrl' => route('evaluation'),
             'reportsUrl' => route('reports'),
-            'profileUrl' => route('profile.edit'),
-            'accountSettingsUrl' => route('account.settings.edit'),
+            'profileUrl' => route('my-profile.edit'),
+            'accountSettingsUrl' => route('account-settings.edit'),
             'unitHeadGradeStoreUrl' => route('unit-head-grades.store'),
             'logoutUrl' => route('logout'),
             'csrfToken' => csrf_token(),
@@ -244,6 +245,6 @@ class SubjectsController extends Controller
             'canAccessEvaluation' => $canAccessEvaluation,
         ];
 
-        return view('subjects', ['subjectsProps' => $subjectsProps]);
+        return Inertia::render('SubjectsPage', $subjectsProps);
     }
 }

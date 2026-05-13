@@ -7,6 +7,7 @@ use App\Models\SupervisorEvaluationSubmission;
 use App\Models\Poes\PoesSubjects;
 use App\Models\UnitHeadGrade;
 use Carbon\Carbon;
+use Inertia\Inertia;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -178,8 +179,8 @@ class EvaluationController extends Controller
             'subjectsUrl' => route('subjects'),
             'evaluationUrl' => route('evaluation'),
             'reportsUrl' => route('reports'),
-            'profileUrl' => route('profile.edit'),
-            'accountSettingsUrl' => route('account.settings.edit'),
+            'profileUrl' => route('my-profile.edit'),
+            'accountSettingsUrl' => route('account-settings.edit'),
             'evaluationStoreUrl' => route('evaluations.store'),
             'logoutUrl' => route('logout'),
             'csrfToken' => csrf_token(),
@@ -206,6 +207,6 @@ class EvaluationController extends Controller
             'canAccessEvaluation' => $canAccessEvaluation,
         ];
 
-        return view('evaluation', ['evaluationProps' => $evaluationProps]);
+        return Inertia::render('EvaluationPage', $evaluationProps);
     }
 }

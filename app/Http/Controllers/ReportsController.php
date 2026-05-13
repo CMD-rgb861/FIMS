@@ -7,6 +7,7 @@ use App\Models\Poes\PoesEvalSubmissions;
 use App\Models\SupervisorEvaluationSubmission;
 use App\Models\UnitHeadGrade;
 use App\Models\User;
+use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 
@@ -165,8 +166,8 @@ class ReportsController extends Controller
             'subjectsUrl' => route('subjects'),
             'evaluationUrl' => route('evaluation'),
             'reportsUrl' => route('reports'),
-            'profileUrl' => route('profile.edit'),
-            'accountSettingsUrl' => route('account.settings.edit'),
+            'profileUrl' => route('my-profile.edit'),
+            'accountSettingsUrl' => route('account-settings.edit'),
             'logoutUrl' => route('logout'),
             'csrfToken' => csrf_token(),
             'user' => [
@@ -204,7 +205,7 @@ class ReportsController extends Controller
             'canAccessEvaluation' => $canAccessEvaluation,
         ];
 
-        return view('reports', ['reportsProps' => $reportsProps]);
+        return Inertia::render('ReportsPage', $reportsProps);
     }
 
     public function faculty(Request $request, string $instructor)
@@ -416,8 +417,8 @@ class ReportsController extends Controller
             'subjectsUrl' => route('subjects'),
             'evaluationUrl' => route('evaluation'),
             'reportsUrl' => route('reports'),
-            'profileUrl' => route('profile.edit'),
-            'accountSettingsUrl' => route('account.settings.edit'),
+            'profileUrl' => route('my-profile.edit'),
+            'accountSettingsUrl' => route('account-settings.edit'),
             'logoutUrl' => route('logout'),
             'csrfToken' => csrf_token(),
             'user' => [
@@ -439,7 +440,7 @@ class ReportsController extends Controller
             'canAccessEvaluation' => $canAccessEvaluation,
         ];
 
-        return view('faculty-report', ['facultyReportProps' => $facultyReportProps]);
+        return Inertia::render('FacultyReportPage', $facultyReportProps);
     }
 
     /**

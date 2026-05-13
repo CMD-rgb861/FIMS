@@ -3,66 +3,50 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
+use App\Http\Requests\Auth\LoginRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\View\View;
+use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class AuthenticatedSessionController extends Controller
 {
-    public function create(): View
+    /**
+     * Display the login view.
+     */
+    public function create(): Response
     {
-        return view('auth.login');
+        return Inertia::render('Auth/Login', [
+            'canResetPassword' => false,
+            'status' => session('status'),
+        ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    /**
+     * Handle an incoming authentication request.
+     */
+    public function store(LoginRequest $request): RedirectResponse
     {
-        $credentials = $request->validate([
-            'id_no' => ['required', 'string'],
-            'password' => ['required', 'string'],
-        ]);
+        $request->authenticate();
 
-        $idNo = trim($credentials['id_no']);
-        $inputPassword = $credentials['password'];
-
-        $user = User::query()
-            ->where('id_no', $idNo)
-            ->first();
-
-        $storedPassword = (string) ($user->password ?? '');
-        $passwordMatches = $storedPassword !== ''
-            && (Hash::check($inputPassword, $storedPassword) || hash_equals($storedPassword, $inputPassword));
-
-        if (! $user || ! $passwordMatches) {
-            return back()
-                ->withErrors(['id_no' => 'The provided credentials are incorrect.'])
-                ->onlyInput('id_no');
-        }
-
-        if (hash_equals($storedPassword, $inputPassword)) {
-            $user->forceFill(['password' => Hash::make($inputPassword)])->save();
-        }
-
-        Auth::login($user);
         $request->session()->regenerate();
 
-        $role = $user->resolveRole();
-
-        $request->session()->put('fims_id_no', $user->id_no);
-        $request->session()->put('fims_role', $role);
-
-        return redirect()->intended(route('dashboard'));
+        return redirect()->intended(route('dashboard', absolute: false));
     }
 
+    /**
+     * Destroy an authenticated session.
+     */
     public function destroy(Request $request): RedirectResponse
     {
-        Auth::logout();
+        Auth::guard('web')->logout();
 
         $request->session()->invalidate();
+
         $request->session()->regenerateToken();
 
-        return redirect()->route('login');
+        return redirect('/');
     }
 }

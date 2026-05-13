@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Traits\FacultyData;
 use App\Models\SupervisorEvaluationSubmission;
 use App\Models\UnitHeadGrade;
+use Inertia\Inertia;
 use Illuminate\Http\Request;
 
 class DashboardController extends Controller
@@ -144,8 +145,8 @@ class DashboardController extends Controller
             'subjectsUrl' => route('subjects'),
             'evaluationUrl' => route('evaluation'),
             'reportsUrl' => route('reports'),
-            'profileUrl' => route('profile.edit'),
-            'accountSettingsUrl' => route('account.settings.edit'),
+            'profileUrl' => route('my-profile.edit'),
+            'accountSettingsUrl' => route('account-settings.edit'),
             'logoutUrl' => route('logout'),
             'csrfToken' => csrf_token(),
             'user' => [
@@ -208,6 +209,6 @@ class DashboardController extends Controller
             'canAccessEvaluation' => $canAccessEvaluation,
         ];
 
-        return view('dashboard', ['dashboardProps' => $dashboardProps]);
+        return Inertia::render('DashboardPage', $dashboardProps);
     }
 }

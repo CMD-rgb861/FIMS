@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Traits\FacultyData;
 use App\Models\UnitHeadGrade;
+use Inertia\Inertia;
 use Illuminate\Http\Request;
 
 class GradesController extends Controller
@@ -60,8 +61,8 @@ class GradesController extends Controller
             'evaluationUrl' => route('evaluation'),
             'gradesUrl' => route('grades'),
             'reportsUrl' => route('reports'),
-            'profileUrl' => route('profile.edit'),
-            'accountSettingsUrl' => route('account.settings.edit'),
+            'profileUrl' => route('my-profile.edit'),
+            'accountSettingsUrl' => route('account-settings.edit'),
             'unitHeadGradeStoreUrl' => route('unit-head-grades.store'),
             'logoutUrl' => route('logout'),
             'csrfToken' => csrf_token(),
@@ -76,6 +77,6 @@ class GradesController extends Controller
             'canAccessEvaluation' => $canAccessEvaluation,
         ];
 
-        return view('grades', ['gradesProps' => $gradesProps]);
+        return Inertia::render('GradesPage', $gradesProps);
     }
 }

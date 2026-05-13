@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Poes\PoesEvalSubmissions;
+use Inertia\Inertia;
 use Illuminate\Http\Request;
 
 class ReportEvaluationController extends Controller
@@ -36,7 +37,7 @@ class ReportEvaluationController extends Controller
                 return $item;
             });
 
-        return view('reports', [
+        return Inertia::render('ReportsPage', [
             'totalScores' => $totalScores,
             'submittedStudentsCount' => $submittedStudentsCount,
             'subjectEvaluations' => $subjectEvaluations,
