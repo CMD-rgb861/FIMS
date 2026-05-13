@@ -333,6 +333,7 @@ class ReportsController extends Controller
 
                 return [
                     'id' => $index + 1,
+                    'school_year_id_value' => $subject['school_year_id'] ?? null,
                     'course_description' => $subject['course_description'] ?? $subject['title'] ?? '-',
                     'employee_id_no' => $employeeIdNo,
                     'employee_name' => $facultyMeta['instructor'],
@@ -382,6 +383,18 @@ class ReportsController extends Controller
             //END
         
 
+            //SCHOOL YEARS FOR FILTERS
+        $schoolYears = DB::connection('lnu_poes')
+            ->table('school_years')
+            ->select(
+                'id as value',
+                DB::raw("CONCAT(school_year_from, '-', school_year_to, ' - Semester ', semester) as label")
+            )
+            ->orderByDesc('id')
+            ->get()
+            ->toArray();
+
+
         $facultyReportProps = [
             'appName' => config('app.name', 'FIMS'),
             'dashboardUrl' => route('dashboard'),
@@ -400,6 +413,8 @@ class ReportsController extends Controller
                 'role' => $currentUser?->role,
             ],
             'facultyName' => $facultyMeta['instructor'],
+            'schoolYears' => $schoolYears,
+            'selectedSchoolYear' => '',
             'tableRows' => $tableRows,
             'overallSetRating' => $overallSetRating,
             'hasPendingEvaluations' => SupervisorEvaluationSubmission::query()
@@ -489,6 +504,7 @@ class ReportsController extends Controller
                         return [
                             // explicit fields requested for reporting
                             'code' => $courseCode,
+                             'school_year_id' => $r->school_year_id ?? null,
                             'year_section' => $yearSection,
                             'year_level' => $yearLevel !== '' ? $yearLevel : null,
                             'section_code' => $sectionCode !== '' ? $sectionCode : null,
