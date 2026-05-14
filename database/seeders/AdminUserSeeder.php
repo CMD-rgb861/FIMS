@@ -24,6 +24,7 @@ class AdminUserSeeder extends Seeder
                 'middlename' => null,
                 'extname' => null,
                 'password' => Hash::make('Admin@123'),
+                'is_admin' => true,
             ]
         );
     }

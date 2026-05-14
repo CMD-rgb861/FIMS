@@ -22,6 +22,7 @@ class User extends Authenticatable
         'password',
         'unit_id',
         'college_id',
+        'is_admin',
     ];
 
     protected $hidden = [
@@ -33,6 +34,7 @@ class User extends Authenticatable
     {
         return [
             'password' => 'hashed',
+            'is_admin' => 'boolean',
         ];
     }
 
@@ -103,6 +105,11 @@ class User extends Authenticatable
 
     public function isAdmin(): bool
     {
+        // Prefer explicit database flag when present
+        if (isset($this->is_admin)) {
+            return (bool) $this->is_admin;
+        }
+
         $idNo = strtolower(trim((string) $this->id_no));
 
         return $idNo === 'admin' || str_starts_with($idNo, 'admin-');
