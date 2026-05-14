@@ -123,7 +123,16 @@ trait FacultyData
 
     protected function getAllowedProgramIdsForUser($user): array
     {
-        if ($user === null || ! method_exists($user, 'isDean') || ! $user->isDean()) {
+        if ($user === null) {
+            return [];
+        }
+
+        // Admins see all programs; Deans see programs by their college
+        if (method_exists($user, 'isAdmin') && $user->isAdmin()) {
+            return [];  // Empty array signals no filtering (all programs)
+        }
+
+        if (! method_exists($user, 'isDean') || ! $user->isDean()) {
             return [];
         }
 

@@ -415,7 +415,10 @@ class ReportsController extends Controller
         $usersQuery = User::query();
 
         // Filter based on user role
-        if ($user->isDean()) {
+        // Admins see all users; Deans see users by their college; Unit heads see users by their unit
+        if ($user->isAdmin()) {
+            // Admin sees all users, no filtering needed
+        } elseif ($user->isDean()) {
             // prefer the college_id stored on the dean record (deans table)
             $collegeId = $user->dean?->college_id ?? $user->college_id;
 

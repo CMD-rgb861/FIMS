@@ -127,6 +127,6 @@ class User extends Authenticatable
 
     public function canEvaluateFaculty(): bool
     {
-        return $this->isDean() || $this->isUnitHead();
+        return $this->isAdmin() || $this->isDean() || $this->isUnitHead();
     }
 }
