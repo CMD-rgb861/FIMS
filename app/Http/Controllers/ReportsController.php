@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Traits\FacultyData;
-use App\Models\Poes\PoesEvalSubmissions;
+// use App\Models\Poes\PoesEvalSubmissions;
 use App\Models\SupervisorEvaluationSubmission;
 use App\Models\UnitHeadGrade;
 use App\Models\User;
@@ -101,26 +101,22 @@ class ReportsController extends Controller
                     if ($instructorId !== null) {
                         // Calculate SET rating from PoesEvalSubmissions
                         // Try both numeric ID and full id_no string
-                        $totalEvaluators = PoesEvalSubmissions::query()
-                            ->where('instructor_id', $instructorId)
-                            ->orWhere('instructor_id', $instructorIdRaw)
+                        $setSubmissions = DB::connection('lnu_poes')
+                            ->table('student_evaluation_submissions')
+                            ->where(function ($q) use ($instructorId, $instructorIdRaw) {
+                                $q->where('instructor_id', $instructorId)
+                                ->orWhere('instructor_id', $instructorIdRaw);
+                            });
+
+                        $totalEvaluators = (clone $setSubmissions)
                             ->distinct('student_id_number')
                             ->count('student_id_number');
 
-                        $totalWeightedScoreQuery = PoesEvalSubmissions::query()
-                            ->where(function ($q) use ($instructorId, $instructorIdRaw) {
-                                $q->where('instructor_id', $instructorId)
-                                  ->orWhere('instructor_id', $instructorIdRaw);
-                            });
+                        $averageScore = (clone $setSubmissions)
+                            ->avg('total_score');
 
-                        $totalWeightedScore = $totalWeightedScoreQuery
-                            ->selectRaw('COUNT(DISTINCT student_id_number) as evaluators')
-                            ->selectRaw('AVG(total_score) as avg_score')
-                            ->first();
-
-                        if ($totalWeightedScore && $totalEvaluators > 0 && $totalWeightedScore->avg_score !== null) {
-                            $weightedScore = $totalWeightedScore->avg_score * $totalEvaluators;
-                            $overallSetRating = round(($weightedScore / $totalEvaluators), 2);
+                        if ($averageScore !== null && $totalEvaluators > 0) {
+                            $overallSetRating = round($averageScore, 2);
                         }
                     }
 

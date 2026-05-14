@@ -2,9 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Poes\PoesEvalSubmissions;
 use Inertia\Inertia;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+
 
 class ReportEvaluationController extends Controller
 {
@@ -12,8 +13,9 @@ class ReportEvaluationController extends Controller
     {
         $currentUser = $request->user();
 
-        $query = PoesEvalSubmissions::query()
-            ->where('instructor_id', $currentUser->id);
+        $query = DB::connection('lnu_poes')
+        ->table('student_evaluation_submissions')
+        ->where('instructor_id', $currentUser->id_no);
 
         // Optional raw scores
         $totalScores = (clone $query)->pluck('total_score');
@@ -51,7 +53,8 @@ class ReportEvaluationController extends Controller
         $courseCode = $request->query('course_code');
         $yearSection = $request->query('year_section');
 
-        $query = PoesEvalSubmissions::query();
+        $query = DB::connection('lnu_poes')
+        ->table('student_evaluation_submissions');
 
         if (! empty($instructorId)) {
             $query->where('instructor_id', $instructorId);

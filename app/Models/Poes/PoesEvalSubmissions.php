@@ -9,6 +9,6 @@ class PoesEvalSubmissions extends Model
 {
     use HasFactory;
 
-    protected $connection = 'lnu_poes';
+    // protected $connection = 'lnu_poes';
     protected $table = 'student_evaluation_submissions';
 }
