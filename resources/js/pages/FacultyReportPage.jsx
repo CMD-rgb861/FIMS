@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import Sidebar from '../components/Sidebar';
+import AppLayout from '../Layouts/AppLayout';
 import FacultyReportPageModal from '../components/FacultyReportPageModal';
 
 export default function FacultyReportPage({
@@ -19,7 +19,6 @@ export default function FacultyReportPage({
     tableRows = [],
     schoolYears = [],
     selectedSchoolYear = '',
-    canAccessEvaluation = true,
 }) {
     const [isSetModalOpen, setIsSetModalOpen] = useState(false);
     const [setBreakdownRows, setSetBreakdownRows] = useState([]);
@@ -103,23 +102,20 @@ export default function FacultyReportPage({
     const selectedSchoolYearLabel = schoolYears.find((option) => String(option.value) === String(selectedSchoolYear))?.label ?? '';
 
     return (
-        <div className="min-h-screen flex bg-slate-50 text-slate-900">
-            <Sidebar
-                user={user}
-                appName={appName}
-                dashboardUrl={dashboardUrl}
-                subjectsUrl={subjectsUrl}
-                evaluationUrl={evaluationUrl}
-                reportsUrl={reportsUrl}
-                profileUrl={profileUrl}
-                accountSettingsUrl={accountSettingsUrl}
-                activePage="reports"
-                logoutUrl={logoutUrl}
-                csrfToken={csrfToken}
-                hasPendingEvaluations={hasPendingEvaluations}
-                canAccessEvaluation={canAccessEvaluation}
-            />
-
+        <AppLayout
+            user={user}
+            appName={appName}
+            dashboardUrl={dashboardUrl}
+            subjectsUrl={subjectsUrl}
+            evaluationUrl={evaluationUrl}
+            reportsUrl={reportsUrl}
+            profileUrl={profileUrl}
+            accountSettingsUrl={accountSettingsUrl}
+            activePage="reports"
+            logoutUrl={logoutUrl}
+            csrfToken={csrfToken}
+            hasPendingEvaluations={hasPendingEvaluations}
+        >
             <main className="flex-1 p-6">
                 <div className="mb-6">
                     <h1 className="mt-2 text-2xl font-semibold tracking-tight">
@@ -156,7 +152,7 @@ export default function FacultyReportPage({
                                     onChange={handleSchoolYearChange}
                                     className="w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
                                 >
-                                    <option value="">All School Years</option>
+                                    {/* <option value="">All School Years</option> */}
                                     {schoolYears.length > 0 ? (
                                         schoolYears.map((option) => (
                                             <option key={option.value} value={option.value}>{option.label}</option>
@@ -258,6 +254,6 @@ export default function FacultyReportPage({
                     errorMessage={modalError}
                 />
             </main>
-        </div>
+        </AppLayout>
     );
 }

@@ -1,5 +1,6 @@
 import React from 'react';
-import Sidebar from '../components/Sidebar';
+import AppLayout from '../Layouts/AppLayout';
+import { isFacultyRole } from '../utils/role';
 
 export default function ReportsPage({
     appName = 'FIMS',
@@ -16,35 +17,33 @@ export default function ReportsPage({
     reportSummary = [],
     recentReports = [],
     facultyList = [],
-    canAccessEvaluation = true,
 }) {
-    return (
-        <div className="min-h-screen flex bg-slate-50 text-slate-900">
-            <Sidebar
-                user={user}
-                appName={appName}
-                dashboardUrl={dashboardUrl}
-                subjectsUrl={subjectsUrl}
-                evaluationUrl={evaluationUrl}
-                reportsUrl={reportsUrl}
-                profileUrl={profileUrl}
-                accountSettingsUrl={accountSettingsUrl}
-                activePage="reports"
-                logoutUrl={logoutUrl}
-                csrfToken={csrfToken}
-                hasPendingEvaluations={hasPendingEvaluations}
-                canAccessEvaluation={canAccessEvaluation}
-            />
+    const isFaculty = isFacultyRole(user?.role);
 
+    return (
+        <AppLayout
+            user={user}
+            appName={appName}
+            dashboardUrl={dashboardUrl}
+            subjectsUrl={subjectsUrl}
+            evaluationUrl={evaluationUrl}
+            reportsUrl={reportsUrl}
+            profileUrl={profileUrl}
+            accountSettingsUrl={accountSettingsUrl}
+            activePage="reports"
+            logoutUrl={logoutUrl}
+            csrfToken={csrfToken}
+            hasPendingEvaluations={hasPendingEvaluations}
+        >
             <main className="flex-1 p-6">
-                {user?.role !== 'faculty' && (
+                {!isFaculty && (
                     <div className="mb-6">
                         <h1 className="text-2xl font-semibold tracking-tight">Evaluation</h1>
                         <p className="mt-1 text-sm text-slate-500">Faculty evaluation list.</p>
                     </div>
                 )}
 
-                {user?.role === 'faculty' ? (
+                {isFaculty ? (
                     <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto">
                         <table className="min-w-full divide-y divide-slate-200 text-sm">
                             <thead className="bg-slate-50">
@@ -116,11 +115,8 @@ export default function ReportsPage({
                                                     <div className="text-sm font-semibold text-slate-900 truncate">{faculty.instructor}</div>
                                                     <div className="text-xs text-slate-500">Employee ID No: {faculty.employee_id_no}</div>
                                                     <div className="text-xs text-slate-500">Subjects: {faculty.subjects_count}</div>
-                                                    {/* <div className="text-xs text-slate-500">
-                                                        {faculty.evaluated ? 'With Evaluation' : 'Without Evaluation'}
-                                                    </div> */}
-                                                     <div className="text-xs text-slate-500">Overall SET Rating: {faculty.overall_set_rating !== null ? `${faculty.overall_set_rating}%` : '-'}</div>
-                                                     <div className="text-xs text-slate-500">Overall SEF Rating: {faculty.overall_sef_rating !== null ? `${faculty.overall_sef_rating}%` : '-'}</div>
+                                                    <div className="text-xs text-slate-500">Overall SET Rating: {faculty.overall_set_rating !== null ? `${faculty.overall_set_rating}%` : '-'}</div>
+                                                    <div className="text-xs text-slate-500">Overall SEF Rating: {faculty.overall_sef_rating !== null ? `${faculty.overall_sef_rating}%` : '-'}</div>
                                                 </div>
                                             </div>
                                         </div>
@@ -135,6 +131,6 @@ export default function ReportsPage({
                     </section>
                 )}
             </main>
-        </div>
+        </AppLayout>
     );
 }

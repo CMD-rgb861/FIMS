@@ -29,10 +29,35 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        $user = $request->user();
+
+        $sharedUser = null;
+
+        if ($user !== null) {
+            $profilePhotoUrl = $user->personalInformation?->profile_photo_path
+                ? asset('storage/' . $user->personalInformation->profile_photo_path)
+                : null;
+
+            $sharedUser = [
+                'id' => $user->id,
+                'id_no' => $user->id_no,
+                'firstname' => $user->firstname,
+                'lastname' => $user->lastname,
+                'middlename' => $user->middlename,
+                'extname' => $user->extname,
+                'profile_photo_url' => $profilePhotoUrl,
+                'role' => method_exists($user, 'resolveRole') ? $user->resolveRole() : null,
+                'isAdmin' => method_exists($user, 'isAdmin') ? $user->isAdmin() : false,
+                'isDean' => method_exists($user, 'isDean') ? $user->isDean() : false,
+                'isUnitHead' => method_exists($user, 'isUnitHead') ? $user->isUnitHead() : false,
+                'canEvaluateFaculty' => method_exists($user, 'canEvaluateFaculty') ? $user->canEvaluateFaculty() : false,
+            ];
+        }
+
         return [
             ...parent::share($request),
             'auth' => [
-                'user' => $request->user(),
+                'user' => $sharedUser,
             ],
         ];
     }

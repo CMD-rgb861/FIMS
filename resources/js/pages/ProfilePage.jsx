@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import Sidebar from '../components/Sidebar';
+import AppLayout from '../Layouts/AppLayout';
 
 function firstError(errors, key) {
     const value = errors?.[key];
@@ -27,7 +27,6 @@ export default function ProfilePage({
     oldInput = {},
     user = null,
     hasPendingEvaluations = false,
-    canAccessEvaluation = true,
 }) {
     const resolvedUser = useMemo(() => ({
         id_no: oldInput?.id_no ?? user?.id_no ?? '',
@@ -79,23 +78,20 @@ export default function ProfilePage({
     const photoFallbackInitial = (formData.firstname?.[0] ?? user?.firstname?.[0] ?? 'U').toUpperCase();
 
     return (
-        <div className="min-h-screen flex bg-slate-50 text-slate-900">
-            <Sidebar
-                user={user}
-                appName={appName}
-                dashboardUrl={dashboardUrl}
-                subjectsUrl={subjectsUrl}
-                evaluationUrl={evaluationUrl}
-                reportsUrl={reportsUrl}
-                profileUrl={profileUrl}
-                accountSettingsUrl={accountSettingsUrl}
-                activePage="profile"
-                logoutUrl={logoutUrl}
-                csrfToken={csrfToken}
-                hasPendingEvaluations={hasPendingEvaluations}
-                canAccessEvaluation={canAccessEvaluation}
-            />
-
+        <AppLayout
+            user={user}
+            appName={appName}
+            dashboardUrl={dashboardUrl}
+            subjectsUrl={subjectsUrl}
+            evaluationUrl={evaluationUrl}
+            reportsUrl={reportsUrl}
+            profileUrl={profileUrl}
+            accountSettingsUrl={accountSettingsUrl}
+            activePage="profile"
+            logoutUrl={logoutUrl}
+            csrfToken={csrfToken}
+            hasPendingEvaluations={hasPendingEvaluations}
+        >
             <main className="flex-1 p-6">
                 <div className="mb-6">
                     <h1 className="text-2xl font-semibold tracking-tight">My Profile</h1>
@@ -313,6 +309,6 @@ export default function ProfilePage({
                     </form>
                 </div>
             </main>
-        </div>
+        </AppLayout>
     );
 }

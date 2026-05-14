@@ -16,11 +16,7 @@ class DashboardController extends Controller
     {
         $facultyEvaluations = $this->getFacultyEvaluations();
         $currentUser = $request->user();
-        $canAccessEvaluation = $this->canAccessEvaluationForUser($currentUser);
-        $profilePhotoUrl = $currentUser?->personalInformation?->profile_photo_path
-            ? asset('storage/' . $currentUser->personalInformation->profile_photo_path)
-            : null;
-
+        $canAccessEvaluation = $this->canAccessEvaluationForUser($currentUser); // Used for access gating and logic, not passed to frontend
         $firstName = trim((string) ($currentUser?->firstname ?? ''));
         $middleName = trim((string) ($currentUser?->middlename ?? ''));
         $lastName = trim((string) ($currentUser?->lastname ?? ''));
@@ -139,25 +135,7 @@ class DashboardController extends Controller
 
         $latestUnitHeadGrade = $unitHeadGrades[0] ?? null;
 
-        $dashboardProps = [
-            'appName' => config('app.name', 'FIMS'),
-            'dashboardUrl' => route('dashboard'),
-            'subjectsUrl' => route('subjects'),
-            'evaluationUrl' => route('evaluation'),
-            'reportsUrl' => route('reports'),
-            'profileUrl' => route('my-profile.edit'),
-            'accountSettingsUrl' => route('account-settings.edit'),
-            'logoutUrl' => route('logout'),
-            'csrfToken' => csrf_token(),
-            'user' => [
-                'id_no' => $currentUser?->id_no,
-                'firstname' => $currentUser?->firstname,
-                'lastname' => $currentUser?->lastname,
-                'profile_photo_url' => $profilePhotoUrl,
-                'role' => method_exists($currentUser, 'resolveRole') ? $currentUser->resolveRole() : null,
-                'isAdmin' => method_exists($currentUser, 'isAdmin') ? $currentUser->isAdmin() : false,
-                'isUnitHead' => $canAccessEvaluation,
-            ],
+        $dashboardProps = $this->commonInertiaProps($currentUser, [
             'summaryCards' => [
                 [
                     'label' => 'Total Instructors',
@@ -206,8 +184,7 @@ class DashboardController extends Controller
             ],
             'recentEvaluations' => $recentEvaluations,
             'hasPendingEvaluations' => $pendingCount > 0,
-            'canAccessEvaluation' => $canAccessEvaluation,
-        ];
+        ]);
 
         return Inertia::render('DashboardPage', $dashboardProps);
     }

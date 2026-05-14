@@ -19,11 +19,6 @@ class ReportsController extends Controller
     {
         $currentUser = $request->user();
         $facultyEvaluations = $this->getLocalFacultyUsers($currentUser);
-        $canAccessEvaluation = $this->canAccessEvaluationForUser($currentUser);
-        $profilePhotoUrl = $currentUser?->personalInformation?->profile_photo_path
-            ? asset('storage/' . $currentUser->personalInformation->profile_photo_path)
-            : null;
-
         $allSubmissions = SupervisorEvaluationSubmission::query()
             ->where('user_id', $currentUser->id)
             ->latest('submitted_at')
@@ -160,23 +155,7 @@ class ReportsController extends Controller
             ->values()
             ->all();
 
-        $reportsProps = [
-            'appName' => config('app.name', 'FIMS'),
-            'dashboardUrl' => route('dashboard'),
-            'subjectsUrl' => route('subjects'),
-            'evaluationUrl' => route('evaluation'),
-            'reportsUrl' => route('reports'),
-            'profileUrl' => route('my-profile.edit'),
-            'accountSettingsUrl' => route('account-settings.edit'),
-            'logoutUrl' => route('logout'),
-            'csrfToken' => csrf_token(),
-            'user' => [
-                'id_no' => $currentUser?->id_no,
-                'firstname' => $currentUser?->firstname,
-                'lastname' => $currentUser?->lastname,
-                'profile_photo_url' => $profilePhotoUrl,
-                'role' => $currentUser?->role,
-            ],
+        $reportsProps = $this->commonInertiaProps($currentUser, [
             'reportSummary' => [
                 [
                     'label' => 'Submitted Evaluations',
@@ -202,8 +181,7 @@ class ReportsController extends Controller
             'recentReports' => $recentReports,
             'facultyList' => $facultyList,
             'hasPendingEvaluations' => $evaluatedInstructors->count() < count($facultyEvaluations),
-            'canAccessEvaluation' => $canAccessEvaluation,
-        ];
+        ]);
 
         return Inertia::render('ReportsPage', $reportsProps);
     }
@@ -212,10 +190,6 @@ class ReportsController extends Controller
     {
         $currentUser = $request->user();
         $facultyEvaluations = $this->getLocalFacultyUsers($currentUser);
-        $canAccessEvaluation = $this->canAccessEvaluationForUser($currentUser);
-        $profilePhotoUrl = $currentUser?->personalInformation?->profile_photo_path
-            ? asset('storage/' . $currentUser->personalInformation->profile_photo_path)
-            : null;
 
         $facultyCollection = collect($facultyEvaluations);
         $facultyIndex = $facultyCollection->search(function ($faculty) use ($instructor) {
@@ -411,23 +385,7 @@ class ReportsController extends Controller
             ->toArray();
 
 
-        $facultyReportProps = [
-            'appName' => config('app.name', 'FIMS'),
-            'dashboardUrl' => route('dashboard'),
-            'subjectsUrl' => route('subjects'),
-            'evaluationUrl' => route('evaluation'),
-            'reportsUrl' => route('reports'),
-            'profileUrl' => route('my-profile.edit'),
-            'accountSettingsUrl' => route('account-settings.edit'),
-            'logoutUrl' => route('logout'),
-            'csrfToken' => csrf_token(),
-            'user' => [
-                'id_no' => $currentUser?->id_no,
-                'firstname' => $currentUser?->firstname,
-                'lastname' => $currentUser?->lastname,
-                'profile_photo_url' => $profilePhotoUrl,
-                'role' => $currentUser?->role,
-            ],
+        $facultyReportProps = $this->commonInertiaProps($currentUser, [
             'facultyName' => $facultyMeta['instructor'],
             'schoolYears' => $schoolYears,
             'selectedSchoolYear' => '',
@@ -437,8 +395,7 @@ class ReportsController extends Controller
                 ->where('user_id', $currentUser->id)
                 ->distinct('instructor')
                 ->count('instructor') < count($facultyEvaluations),
-            'canAccessEvaluation' => $canAccessEvaluation,
-        ];
+        ]);
 
         return Inertia::render('FacultyReportPage', $facultyReportProps);
     }

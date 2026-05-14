@@ -1,4 +1,5 @@
 import React from 'react';
+import { getRoleLabel, normalizeRole } from '../utils/role';
 
 export default function Sidebar({
     user,
@@ -14,20 +15,16 @@ export default function Sidebar({
     logoutUrl,
     csrfToken,
     hasPendingEvaluations = false,
-    canAccessEvaluation = true,
 }) {
-    const fullName = `${user?.firstname ?? ''} ${user?.lastname ?? 'Student'}`.trim();
-    const initial = (user?.firstname?.[0] ?? 'U').toUpperCase();
+    const resolvedUser = user ?? {};
+
+    const fullName = `${resolvedUser?.firstname ?? ''} ${resolvedUser?.lastname ?? 'Student'}`.trim();
+    const initial = (resolvedUser?.firstname?.[0] ?? 'U').toUpperCase();
     const appLabel = appName || 'FIMS';
-    const profilePhotoUrl = user?.profile_photo_url ?? '';
-    const role = String(user?.role ?? '').toLowerCase();
-    const roleLabel = role === 'admin'
-        ? 'Admin'
-        : role === 'unit_head'
-            ? 'Unit Head'
-            : role === 'dean'
-                ? 'Dean'
-                : 'Faculty';
+    const profilePhotoUrl = resolvedUser?.profile_photo_url ?? '';
+    const role = normalizeRole(resolvedUser?.role);
+    const roleLabel = getRoleLabel(role);
+    const resolvedCanAccessEvaluation = resolvedUser?.canEvaluateFaculty ?? false;
 
     const navClass = (key) => (
         activePage === key
@@ -76,7 +73,7 @@ export default function Sidebar({
                     <span className="text-sm font-medium">Subjects</span>
                 </a>
 
-                {canAccessEvaluation ? (
+                {resolvedCanAccessEvaluation ? (
                     <a href={evaluationUrl} className={navClass('evaluation')}>
                         <span className={iconClass('evaluation')}>
                             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
@@ -92,7 +89,7 @@ export default function Sidebar({
                     </a>
                 ) : null}
 
-                {canAccessEvaluation ? (
+                {resolvedCanAccessEvaluation ? (
                     <a href={gradesUrl} className={navClass('grades')}>
                         <span className={iconClass('grades')}>
                             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
@@ -158,7 +155,7 @@ export default function Sidebar({
                     )}
                     <div className="min-w-0">
                         <div className="text-sm font-semibold truncate">{fullName}</div>
-                        <div className="text-xs text-slate-500 truncate">{user?.id_no ?? 'N/A'}</div>
+                        <div className="text-xs text-slate-500 truncate">{resolvedUser?.id_no ?? 'N/A'}</div>
                         <div className="mt-1 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
                             {roleLabel}
                         </div>

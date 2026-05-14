@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import Sidebar from '../components/Sidebar';
+import AppLayout from '../Layouts/AppLayout';
 import FacultyGradeModal from '../components/FacultyGradeModal';
 
 export default function GradesPage({
@@ -17,7 +17,6 @@ export default function GradesPage({
     user = null,
     evaluations = [],
     hasPendingEvaluations = false,
-    canAccessEvaluation = true,
 }) {
     const [items, setItems] = useState(Array.isArray(evaluations) ? evaluations : []);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -54,24 +53,21 @@ export default function GradesPage({
     };
 
     return (
-        <div className="min-h-screen flex bg-slate-50 text-slate-900">
-            <Sidebar
-                user={user}
-                appName={appName}
-                dashboardUrl={dashboardUrl}
-                subjectsUrl={subjectsUrl}
-                evaluationUrl={evaluationUrl}
-                gradesUrl={gradesUrl}
-                reportsUrl={reportsUrl}
-                profileUrl={profileUrl}
-                accountSettingsUrl={accountSettingsUrl}
-                activePage="grades"
-                logoutUrl={logoutUrl}
-                csrfToken={csrfToken}
-                hasPendingEvaluations={hasPendingEvaluations}
-                canAccessEvaluation={canAccessEvaluation}
-            />
-
+        <AppLayout
+            user={user}
+            appName={appName}
+            dashboardUrl={dashboardUrl}
+            subjectsUrl={subjectsUrl}
+            evaluationUrl={evaluationUrl}
+            gradesUrl={gradesUrl}
+            reportsUrl={reportsUrl}
+            profileUrl={profileUrl}
+            accountSettingsUrl={accountSettingsUrl}
+            activePage="grades"
+            logoutUrl={logoutUrl}
+            csrfToken={csrfToken}
+            hasPendingEvaluations={hasPendingEvaluations}
+        >
             <main className="flex-1 overflow-y-auto p-6">
                 <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
                     <div>
@@ -147,6 +143,6 @@ export default function GradesPage({
                 onClose={closeModal}
                 onSubmitted={handleGradeSubmitted}
             />
-        </div>
+        </AppLayout>
     );
 }

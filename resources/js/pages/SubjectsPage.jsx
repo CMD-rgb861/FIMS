@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import Sidebar from '../components/Sidebar';
+import AppLayout from '../Layouts/AppLayout';
 
 export default function SubjectsPage({
     appName = 'FIMS',
@@ -16,7 +16,6 @@ export default function SubjectsPage({
     subjects = [],
     availableTerms = [],
     hasPendingEvaluations = false,
-    canAccessEvaluation = true,
 }) {
     const displayName = user?.display_name || [user?.firstname, user?.lastname].filter(Boolean).join(' ') || 'Faculty';
     const subjectItems = Array.isArray(subjects) ? subjects : [];
@@ -49,23 +48,21 @@ export default function SubjectsPage({
     }, [selectedTerm, subjectItems]);
 
     return (
-        <div className="h-screen flex overflow-hidden bg-slate-50 text-slate-900">
-            <Sidebar
-                user={user}
-                appName={appName}
-                dashboardUrl={dashboardUrl}
-                subjectsUrl={subjectsUrl}
-                evaluationUrl={evaluationUrl}
-                reportsUrl={reportsUrl}
-                profileUrl={profileUrl}
-                accountSettingsUrl={accountSettingsUrl}
-                activePage="subjects"
-                logoutUrl={logoutUrl}
-                csrfToken={csrfToken}
-                hasPendingEvaluations={hasPendingEvaluations}
-                canAccessEvaluation={canAccessEvaluation}
-            />
-
+        <AppLayout
+            user={user}
+            appName={appName}
+            dashboardUrl={dashboardUrl}
+            subjectsUrl={subjectsUrl}
+            evaluationUrl={evaluationUrl}
+            reportsUrl={reportsUrl}
+            profileUrl={profileUrl}
+            accountSettingsUrl={accountSettingsUrl}
+            activePage="subjects"
+            logoutUrl={logoutUrl}
+            csrfToken={csrfToken}
+            hasPendingEvaluations={hasPendingEvaluations}
+            layoutClassName="h-screen flex overflow-hidden bg-slate-50 text-slate-900"
+        >
             <main className="flex-1 overflow-y-auto p-6">
                 <div className="mb-6">
                     <h1 className="text-2xl font-semibold tracking-tight">Enrolled Subjects</h1>
@@ -135,6 +132,6 @@ export default function SubjectsPage({
                     </table>
                 </section>
             </main>
-        </div>
+        </AppLayout>
     );
 }

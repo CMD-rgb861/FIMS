@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Traits\FacultyData;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -12,22 +13,14 @@ use Inertia\Response;
 
 class AppProfileController extends Controller
 {
+    use FacultyData;
     public function edit(Request $request): Response
     {
         $user = $request->user();
         $personalInformation = $user?->personalInformation;
 
-        return Inertia::render('ProfilePage', [
-            'appName' => config('app.name', 'FIMS'),
-            'dashboardUrl' => route('dashboard'),
-            'subjectsUrl' => route('subjects'),
-            'evaluationUrl' => route('evaluation'),
-            'reportsUrl' => route('reports'),
-            'profileUrl' => route('my-profile.edit'),
-            'accountSettingsUrl' => route('account-settings.edit'),
+        return Inertia::render('ProfilePage', $this->commonInertiaProps($user, [
             'profileUpdateUrl' => route('my-profile.update'),
-            'logoutUrl' => route('logout'),
-            'csrfToken' => csrf_token(),
             'status' => session('status', ''),
             'user' => [
                 'id_no' => $user?->id_no,
@@ -46,8 +39,7 @@ class AppProfileController extends Controller
             ],
             'oldInput' => $request->session()->get('_old_input', []),
             'hasPendingEvaluations' => false,
-            'canAccessEvaluation' => method_exists($user, 'canEvaluateFaculty') ? $user->canEvaluateFaculty() : false,
-        ]);
+        ]));
     }
 
     public function update(Request $request): RedirectResponse
@@ -117,25 +109,15 @@ class AppProfileController extends Controller
         $user = $request->user();
         $personalInformation = $user?->personalInformation;
 
-        return Inertia::render('AccountSettingsPage', [
-            'appName' => config('app.name', 'FIMS'),
-            'dashboardUrl' => route('dashboard'),
-            'subjectsUrl' => route('subjects'),
-            'evaluationUrl' => route('evaluation'),
-            'reportsUrl' => route('reports'),
-            'profileUrl' => route('my-profile.edit'),
-            'accountSettingsUrl' => route('account-settings.edit'),
+        return Inertia::render('AccountSettingsPage', $this->commonInertiaProps($user, [
             'accountSettingsUpdateUrl' => route('account-settings.update'),
-            'logoutUrl' => route('logout'),
-            'csrfToken' => csrf_token(),
             'status' => session('status', ''),
             'user' => [
                 'email' => $personalInformation?->email,
             ],
             'oldInput' => $request->session()->get('_old_input', []),
             'hasPendingEvaluations' => false,
-            'canAccessEvaluation' => method_exists($user, 'canEvaluateFaculty') ? $user->canEvaluateFaculty() : false,
-        ]);
+        ]));
     }
 
     public function accountSettingsUpdate(Request $request): RedirectResponse

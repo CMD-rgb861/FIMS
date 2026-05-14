@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
-import Sidebar from '../components/Sidebar';
+import React, { useState } from 'react';
+import AppLayout from '../Layouts/AppLayout';
+import { isAdminRole, isUnitHeadRole } from '../utils/role';
 
 export default function DashboardPage({
     appName = 'FIMS',
@@ -16,11 +17,9 @@ export default function DashboardPage({
     unitHeadEvaluationRating = 'N/A',
     unitHeadEvaluationHelper = 'Unit Head evaluation rating will appear once submitted.',
     hasPendingEvaluations = false,
-    canAccessEvaluation = true,
 }) {
-    const role = String(user?.role ?? '').toLowerCase();
-    const isAdmin = role === 'admin' || user?.isAdmin === true;
-    const isUnitHead = user?.isUnitHead ?? false;
+    const isAdmin = user?.isAdmin === true || isAdminRole(user?.role);
+    const isUnitHead = user?.isUnitHead === true || user?.canEvaluateFaculty === true || isUnitHeadRole(user?.role);
     const gradeCard = gradeSummaryCards.find(
         (card) =>
             String(card.label || '').toLowerCase().includes('unit head grade') ||
@@ -56,23 +55,20 @@ export default function DashboardPage({
     ];
 
     return (
-        <div className="min-h-screen flex bg-slate-50 text-slate-900">
-            <Sidebar
-                user={user}
-                appName={appName}
-                dashboardUrl={dashboardUrl}
-                subjectsUrl={subjectsUrl}
-                evaluationUrl={evaluationUrl}
-                reportsUrl={reportsUrl}
-                profileUrl={profileUrl}
-                accountSettingsUrl={accountSettingsUrl}
-                activePage="dashboard"
-                logoutUrl={logoutUrl}
-                csrfToken={csrfToken}
-                hasPendingEvaluations={hasPendingEvaluations}
-                canAccessEvaluation={canAccessEvaluation}
-            />
-
+        <AppLayout
+            user={user}
+            appName={appName}
+            dashboardUrl={dashboardUrl}
+            subjectsUrl={subjectsUrl}
+            evaluationUrl={evaluationUrl}
+            reportsUrl={reportsUrl}
+            profileUrl={profileUrl}
+            accountSettingsUrl={accountSettingsUrl}
+            activePage="dashboard"
+            logoutUrl={logoutUrl}
+            csrfToken={csrfToken}
+            hasPendingEvaluations={hasPendingEvaluations}
+        >
             <main className="flex-1 overflow-y-auto p-6">
                 <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-slate-950 px-6 py-7 text-white shadow-xl shadow-slate-900/10 sm:px-8">
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(125,211,252,0.24),_transparent_38%),radial-gradient(circle_at_bottom_left,_rgba(148,163,184,0.18),_transparent_35%)]" />
@@ -121,6 +117,6 @@ export default function DashboardPage({
                     </div>
                 </section>
             </main>
-        </div>
+        </AppLayout>
     );
 }

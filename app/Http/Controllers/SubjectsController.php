@@ -18,7 +18,6 @@ class SubjectsController extends Controller
     {
         $facultyEvaluations = $this->getFacultyEvaluations();
         $currentUser = $request->user();
-        $canAccessEvaluation = $this->canAccessEvaluationForUser($currentUser);
         $profilePhotoUrl = $currentUser?->personalInformation?->profile_photo_path
             ? asset('storage/' . $currentUser->personalInformation->profile_photo_path)
             : null;
@@ -218,32 +217,14 @@ class SubjectsController extends Controller
             ];
         })->values()->all();
 
-        $subjectsProps = [
-            'appName' => config('app.name', 'FIMS'),
-            'dashboardUrl' => route('dashboard'),
-            'subjectsUrl' => route('subjects'),
-            'evaluationUrl' => route('evaluation'),
-            'reportsUrl' => route('reports'),
-            'profileUrl' => route('my-profile.edit'),
-            'accountSettingsUrl' => route('account-settings.edit'),
-            'unitHeadGradeStoreUrl' => route('unit-head-grades.store'),
-            'logoutUrl' => route('logout'),
-            'csrfToken' => csrf_token(),
-            'user' => [
-                'id_no' => $currentUser?->id_no,
-                'firstname' => $currentUser?->firstname,
-                'lastname' => $currentUser?->lastname,
-                'display_name' => trim(collect([$currentUser?->firstname, $currentUser?->middlename, $currentUser?->lastname, $currentUser?->extname])->filter()->implode(' ')),
-                'profile_photo_url' => $profilePhotoUrl,
-            ],
+        $subjectsProps = $this->commonInertiaProps($currentUser, [
             'subjects' => $subjects,
             'availableTerms' => $availableTerms,
             'hasPendingEvaluations' => UnitHeadGrade::query()
                 ->where('user_id', $currentUser->id)
                 ->distinct('instructor')
                 ->count('instructor') < count($facultyEvaluations),
-            'canAccessEvaluation' => $canAccessEvaluation,
-        ];
+        ]);
 
         return Inertia::render('SubjectsPage', $subjectsProps);
     }

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import Sidebar from '../components/Sidebar';
+import AppLayout from '../Layouts/AppLayout';
 import SefEvaluationModal from '../components/SefEvaluationModal';
 import EvaluationResultModal from '../components/EvaluationResultModal';
+import { isAdminRole } from '../utils/role';
 
 export default function EvaluationPage({
     appName = 'FIMS',
@@ -26,10 +27,8 @@ export default function EvaluationPage({
     evaluationStatusLabel = 'Open for Evaluation',
     hasPendingEvaluations = false,
     reportsUrl = '/reports',
-    canAccessEvaluation = true,
 }) {
-    const role = String(user?.role ?? '').toLowerCase();
-    const isAdmin = role === 'admin' || user?.isAdmin === true;
+    const isAdmin = user?.isAdmin === true || isAdminRole(user?.role);
     const [isEvaluationOpen, setIsEvaluationOpen] = useState(false);
     const [selectedEvaluation, setSelectedEvaluation] = useState(null);
     const [isResultOpen, setIsResultOpen] = useState(false);
@@ -81,23 +80,21 @@ export default function EvaluationPage({
     };
 
     return (
-        <div className="min-h-screen flex">
-            <Sidebar
-                user={user}
-                appName={appName}
-                dashboardUrl={dashboardUrl}
-                subjectsUrl={subjectsUrl}
-                evaluationUrl={evaluationUrl}
-                reportsUrl={reportsUrl}
-                profileUrl={profileUrl}
-                accountSettingsUrl={accountSettingsUrl}
-                activePage="evaluation"
-                logoutUrl={logoutUrl}
-                csrfToken={csrfToken}
-                hasPendingEvaluations={hasPendingEvaluations}
-                canAccessEvaluation={canAccessEvaluation}
-            />
-
+        <AppLayout
+            user={user}
+            appName={appName}
+            dashboardUrl={dashboardUrl}
+            subjectsUrl={subjectsUrl}
+            evaluationUrl={evaluationUrl}
+            reportsUrl={reportsUrl}
+            profileUrl={profileUrl}
+            accountSettingsUrl={accountSettingsUrl}
+            activePage="evaluation"
+            logoutUrl={logoutUrl}
+            csrfToken={csrfToken}
+            hasPendingEvaluations={hasPendingEvaluations}
+            layoutClassName="min-h-screen flex"
+        >
             <main className="flex-1">
                 <div className="h-16 bg-white border-b border-slate-200 flex items-center px-6">
                     <div className="text-sm text-slate-500 flex items-center gap-2">
@@ -270,6 +267,6 @@ export default function EvaluationPage({
                     onClose={closeResultModal}
                 />
             </main>
-        </div>
+            </AppLayout>
     );
 }

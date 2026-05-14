@@ -21,11 +21,7 @@ class EvaluationController extends Controller
         $facultyEvaluations = $this->getFacultyEvaluations();
         $currentUser = $request->user();
         $canAccessEvaluation = $this->canAccessEvaluationForUser($currentUser);
-        abort_if(! $canAccessEvaluation, 403);
-
-        $profilePhotoUrl = $currentUser?->personalInformation?->profile_photo_path
-            ? asset('storage/' . $currentUser->personalInformation->profile_photo_path)
-            : null;
+        abort_if(! $canAccessEvaluation, 403); // Backend access gate remains
 
         $schoolYearRows = DB::connection('lnu_poes')
             ->table('school_years')
@@ -173,26 +169,7 @@ class EvaluationController extends Controller
             }));
         }
 
-        $evaluationProps = [
-            'appName' => config('app.name', 'FIMS'),
-            'dashboardUrl' => route('dashboard'),
-            'subjectsUrl' => route('subjects'),
-            'evaluationUrl' => route('evaluation'),
-            'reportsUrl' => route('reports'),
-            'profileUrl' => route('my-profile.edit'),
-            'accountSettingsUrl' => route('account-settings.edit'),
-            'evaluationStoreUrl' => route('evaluations.store'),
-            'logoutUrl' => route('logout'),
-            'csrfToken' => csrf_token(),
-            'user' => [
-                'id_no' => $currentUser?->id_no,
-                'firstname' => $currentUser?->firstname,
-                'lastname' => $currentUser?->lastname,
-                'profile_photo_url' => $profilePhotoUrl,
-                'role' => method_exists($currentUser, 'resolveRole') ? $currentUser->resolveRole() : null,
-                'isAdmin' => method_exists($currentUser, 'isAdmin') ? $currentUser->isAdmin() : false,
-                'isUnitHead' => $canAccessEvaluation,
-            ],
+        $evaluationProps = $this->commonInertiaProps($currentUser, [
             'schoolYears' => $schoolYears,
             'terms' => $terms,
             'subjects' => $subjects,
@@ -204,8 +181,7 @@ class EvaluationController extends Controller
             'isEvaluationClosed' => $isEvaluationClosed,
             'evaluationStatusLabel' => $evaluationStatusLabel,
             'hasPendingEvaluations' => count($evaluatedInstructors) < count($facultyEvaluations),
-            'canAccessEvaluation' => $canAccessEvaluation,
-        ];
+        ]);
 
         return Inertia::render('EvaluationPage', $evaluationProps);
     }

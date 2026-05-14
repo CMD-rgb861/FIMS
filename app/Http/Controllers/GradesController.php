@@ -16,11 +16,7 @@ class GradesController extends Controller
         $facultyEvaluations = $this->getFacultyEvaluations();
         $currentUser = $request->user();
         $canAccessEvaluation = $this->canAccessEvaluationForUser($currentUser);
-        abort_if(! $canAccessEvaluation, 403);
-
-        $profilePhotoUrl = $currentUser?->personalInformation?->profile_photo_path
-            ? asset('storage/' . $currentUser->personalInformation->profile_photo_path)
-            : null;
+        abort_if(! $canAccessEvaluation, 403); // Backend access gate remains
 
         $existingGrades = UnitHeadGrade::query()
             ->where('user_id', $currentUser->id)
@@ -54,28 +50,10 @@ class GradesController extends Controller
             })
             ->count();
 
-        $gradesProps = [
-            'appName' => config('app.name', 'FIMS'),
-            'dashboardUrl' => route('dashboard'),
-            'subjectsUrl' => route('subjects'),
-            'evaluationUrl' => route('evaluation'),
-            'gradesUrl' => route('grades'),
-            'reportsUrl' => route('reports'),
-            'profileUrl' => route('my-profile.edit'),
-            'accountSettingsUrl' => route('account-settings.edit'),
-            'unitHeadGradeStoreUrl' => route('unit-head-grades.store'),
-            'logoutUrl' => route('logout'),
-            'csrfToken' => csrf_token(),
-            'user' => [
-                'id_no' => $currentUser?->id_no,
-                'firstname' => $currentUser?->firstname,
-                'lastname' => $currentUser?->lastname,
-                'profile_photo_url' => $profilePhotoUrl,
-            ],
+        $gradesProps = $this->commonInertiaProps($currentUser, [
             'evaluations' => $evaluations,
             'hasPendingEvaluations' => $gradedCount < count($facultyEvaluations),
-            'canAccessEvaluation' => $canAccessEvaluation,
-        ];
+        ]);
 
         return Inertia::render('GradesPage', $gradesProps);
     }
