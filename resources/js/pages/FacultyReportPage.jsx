@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import AppLayout from '../Layouts/AppLayout';
 import FacultyReportPageModal from '../components/FacultyReportPageModal';
@@ -33,6 +33,22 @@ export default function FacultyReportPage({
      */
     const [selectedFilter, setSelectedFilter] = useState('all');
     const [currentSchoolYear, setCurrentSchoolYear] = useState(selectedSchoolYear);
+
+    // Ensure the school year filter is initialized to the backend-provided
+    // `selectedSchoolYear` when available; otherwise default to the first
+    // available school year so the list is filtered immediately.
+    useEffect(() => {
+        if (selectedSchoolYear && String(selectedSchoolYear) !== '') {
+            setCurrentSchoolYear(String(selectedSchoolYear));
+            return;
+        }
+
+        if (Array.isArray(schoolYears) && schoolYears.length > 0) {
+            setCurrentSchoolYear(String(schoolYears[0].value));
+        } else {
+            setCurrentSchoolYear('');
+        }
+    }, [schoolYears, selectedSchoolYear]);
 
     const openSetModal = async (row) => {
         setModalError('');
