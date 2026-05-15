@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import AppLayout from '../Layouts/AppLayout';
+import { router } from '@inertiajs/react';
 import FacultyReportPageModal from '../components/FacultyReportPageModal';
 
 export default function FacultyReportPage({
+    tablePagination = null,
     appName = 'FIMS',
     dashboardUrl = '/dashboard',
     subjectsUrl = '/subjects',
@@ -31,25 +33,11 @@ export default function FacultyReportPage({
      * Initialized from props (selectedSchoolYear from backend)
      * Used to filter tableRows by matching school_year_id
      */
-    const [selectedFilter, setSelectedFilter] = useState('all');
-    const [currentSchoolYear, setCurrentSchoolYear] = useState(selectedSchoolYear);
+    
 
     // Ensure the school year filter is initialized to the backend-provided
     // `selectedSchoolYear` when available; otherwise default to the first
     // available school year so the list is filtered immediately.
-    useEffect(() => {
-        if (selectedSchoolYear && String(selectedSchoolYear) !== '') {
-            setCurrentSchoolYear(String(selectedSchoolYear));
-            return;
-        }
-
-        if (Array.isArray(schoolYears) && schoolYears.length > 0) {
-            setCurrentSchoolYear(String(schoolYears[0].value));
-        } else {
-            setCurrentSchoolYear('');
-        }
-    }, [schoolYears, selectedSchoolYear]);
-
     const openSetModal = async (row) => {
         setModalError('');
         setSetBreakdownRows(Array.isArray(row?.set_breakdown) ? row.set_breakdown : []);
@@ -94,28 +82,32 @@ export default function FacultyReportPage({
      */
     const handleSchoolYearChange = (event) => {
         const newSchoolYear = event.target.value;
-        setCurrentSchoolYear(newSchoolYear);
+
+        router.get(route('reports.faculty', {
+            instructor: facultyName,
+            term: newSchoolYear,
+            page: 1,
+        }), {}, {
+            preserveState: false,
+            replace: true,
+        });
     };
 
-    const filteredRows = tableRows.filter((row) => {
-        // DEBUG POINT 1: Filter by evaluation status (all/evaluated/pending)
-        let statusMatch = true;
-        if (selectedFilter === 'all') statusMatch = true;
-        if (selectedFilter === 'evaluated') statusMatch = row.status === 'Evaluated';
-        if (selectedFilter === 'pending') statusMatch = row.status !== 'Evaluated';
 
-        // DEBUG POINT 2: Filter by school year if one is selected
-        // CRITICAL: Ensure row.school_year_id_value matches the selected school year ID from backend
-        let schoolYearMatch = true;
-        if (currentSchoolYear !== '' && currentSchoolYear !== undefined) {
-            // Convert both to string for comparison since school_year_id comes from database
-            schoolYearMatch = String(row.school_year_id_value) === String(currentSchoolYear);
-        }
-
-        return statusMatch && schoolYearMatch;
-    });
-
+    const filteredRows = tableRows;
     const selectedSchoolYearLabel = schoolYears.find((option) => String(option.value) === String(selectedSchoolYear))?.label ?? '';
+    
+
+    const handlePageChange = (newPage) => {
+        router.get(route('reports.faculty', {
+            instructor: facultyName,
+            term: selectedSchoolYear,
+            page: newPage,
+        }), {}, {
+            preserveState: true,
+            replace: true,
+        });
+    };
 
     return (
         <AppLayout
@@ -164,7 +156,7 @@ export default function FacultyReportPage({
                                   * currentSchoolYear is used in filteredRows logic
                                   */}
                                 <select
-                                    value={currentSchoolYear}
+                                    value={selectedSchoolYear ? String(selectedSchoolYear) : ''}
                                     onChange={handleSchoolYearChange}
                                     className="w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
                                 >
@@ -187,8 +179,8 @@ export default function FacultyReportPage({
                               * DEBUG POINT: Display selected school year label
                               * Shows which school year is currently filtered
                               */}
-                            {currentSchoolYear !== '' 
-                                ? schoolYears.find((option) => String(option.value) === String(currentSchoolYear))?.label || 'All school years'
+                            {selectedSchoolYear
+                                ? schoolYears.find((option) => String(option.value) === String(selectedSchoolYear))?.label || 'All school years'
                                 : 'All school years'}
                         </span>
                     </div>
@@ -260,6 +252,28 @@ export default function FacultyReportPage({
                         </tbody>
                     </table>
                 </section>
+
+                <div className="flex items-center justify-between mt-4">
+                    <button
+                        disabled={tablePagination?.current_page <= 1}
+                        onClick={() => handlePageChange((tablePagination?.current_page ?? 1) - 1)}
+                        className="px-3 py-1 text-sm bg-gray-200 rounded disabled:opacity-50"
+                    >
+                        Previous
+                    </button>
+
+                    <span className="text-sm text-slate-600">
+                        Page {tablePagination?.current_page} of {tablePagination?.last_page}
+                    </span>
+
+                    <button
+                        disabled={tablePagination?.current_page >= tablePagination?.last_page}
+                        onClick={() => handlePageChange((tablePagination?.current_page ?? 1) + 1)}
+                        className="px-3 py-1 text-sm bg-gray-200 rounded disabled:opacity-50"
+                    >
+                        Next
+                    </button>
+                </div>
 
                 <FacultyReportPageModal
                     isOpen={isSetModalOpen}

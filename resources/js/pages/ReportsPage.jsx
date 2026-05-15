@@ -15,8 +15,8 @@ export default function ReportsPage({
     user = null,
     hasPendingEvaluations = false,
     reportSummary = [],
-    recentReports = [],
-    facultyList = [],
+    facultyList = { data: [] },
+    recentReports = { data: [] },
 }) {
     const isFaculty = isFacultyRole(user?.role);
 

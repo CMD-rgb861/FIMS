@@ -1,7 +1,9 @@
 import React, { useMemo, useState } from 'react';
+import { router } from '@inertiajs/react';
 import AppLayout from '../Layouts/AppLayout';
 
 export default function SubjectsPage({
+    subjectPagination = null,
     appName = 'FIMS',
     dashboardUrl = '/dashboard',
     subjectsUrl = '/subjects',
@@ -13,13 +15,17 @@ export default function SubjectsPage({
     logoutUrl = '/logout',
     csrfToken = '',
     user = null,
-    subjects = [],
+    subjects = { data: [] },
     availableTerms = [],
     hasPendingEvaluations = false,
 }) {
     const displayName = user?.display_name || [user?.firstname, user?.lastname].filter(Boolean).join(' ') || 'Faculty';
-    const subjectItems = Array.isArray(subjects) ? subjects : [];
-    const [selectedTerm, setSelectedTerm] = useState('all');
+    const subjectItems = Array.isArray(subjects?.data)
+        ? subjects.data
+        : Array.isArray(subjects)
+            ? subjects
+            : [];
+    const [selectedTerm, setSelectedTerm] = useState('');
 
     const termOptions = useMemo(() => {
         const fromProps = (Array.isArray(availableTerms) ? availableTerms : [])
@@ -33,7 +39,11 @@ export default function SubjectsPage({
             })
             .filter(Boolean);
 
-        return Array.from(new Set([...fromProps, ...fromSubjects])).sort((a, b) => a.localeCompare(b));
+        return Array.from(new Set([...fromProps, ...fromSubjects])).sort((a, b) => {
+            const yearA = parseInt(a.match(/\d{4}/)?.[0] || 0);
+            const yearB = parseInt(b.match(/\d{4}/)?.[0] || 0);
+            return yearB - yearA;
+        });
     }, [availableTerms, subjectItems]);
 
     const filteredItems = useMemo(() => {
@@ -46,6 +56,16 @@ export default function SubjectsPage({
             return value === selectedTerm;
         });
     }, [selectedTerm, subjectItems]);
+
+    const handlePageChange = (page) => {
+        router.get(route('subjects.index'), {
+            page,
+            term: selectedTerm,
+        }, {
+            preserveState: true,
+            replace: true,
+        });
+    };
 
     return (
         <AppLayout
@@ -80,7 +100,7 @@ export default function SubjectsPage({
                                     onChange={(event) => setSelectedTerm(event.target.value)}
                                     className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
                                 >
-                                    <option value="all">All</option>
+                                    {/* <option value="all">All</option> */}
                                     {termOptions.map((term) => (
                                         <option key={term} value={term}>
                                             {term}
@@ -130,6 +150,30 @@ export default function SubjectsPage({
                             )}
                         </tbody>
                     </table>
+
+                    {subjectPagination && (
+                        <div className="flex items-center justify-between mt-4">
+                            <button
+                                disabled={subjectPagination.current_page <= 1}
+                                onClick={() => handlePageChange(subjectPagination.current_page - 1)}
+                                className="px-3 py-1 text-sm bg-gray-200 rounded disabled:opacity-50"
+                            >
+                                Previous
+                            </button>
+
+                            <span className="text-sm text-slate-600">
+                                Page {subjectPagination.current_page} of {subjectPagination.last_page}
+                            </span>
+
+                            <button
+                                disabled={subjectPagination.current_page >= subjectPagination.last_page}
+                                onClick={() => handlePageChange(subjectPagination.current_page + 1)}
+                                className="px-3 py-1 text-sm bg-gray-200 rounded disabled:opacity-50"
+                            >
+                                Next
+                            </button>
+                        </div>
+                    )}
                 </section>
             </main>
         </AppLayout>

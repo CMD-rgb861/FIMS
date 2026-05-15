@@ -39,19 +39,20 @@ class HandleInertiaRequests extends Middleware
                 : null;
 
             $sharedUser = [
-                'id' => $user->id,
-                'id_no' => $user->id_no,
-                'firstname' => $user->firstname,
-                'lastname' => $user->lastname,
-                'middlename' => $user->middlename,
-                'extname' => $user->extname,
-                'profile_photo_url' => $profilePhotoUrl,
-                'role' => method_exists($user, 'resolveRole') ? $user->resolveRole() : null,
-                'isAdmin' => method_exists($user, 'isAdmin') ? $user->isAdmin() : false,
-                'isDean' => method_exists($user, 'isDean') ? $user->isDean() : false,
-                'isUnitHead' => method_exists($user, 'isUnitHead') ? $user->isUnitHead() : false,
-                'canEvaluateFaculty' => method_exists($user, 'canEvaluateFaculty') ? $user->canEvaluateFaculty() : false,
-            ];
+                    'id' => $user->id,
+                    'id_no' => $user->id_no,
+                    'firstname' => $user->firstname,
+                    'lastname' => $user->lastname,
+                    'middlename' => $user->middlename,
+                    'extname' => $user->extname,
+                    'profile_photo_url' => $profilePhotoUrl,
+
+                    // NO METHOD CALLS (IMPORTANT)
+                    'role' => $user->role ?? null,
+                    'isAdmin' => $user->role === 'admin',
+                    'isDean' => $user->role === 'dean',
+                    'isUnitHead' => $user->role === 'unit_head',
+                ];
         }
 
         return [

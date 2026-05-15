@@ -152,3 +152,34 @@ If future enhancements are needed:
 4. Role-based API endpoints if API layer is added
 
 Current implementation is sufficient and production-ready.
+
+
+Implemented a full second-pass optimization of ReportsController.php focused on large dataset performance in index, faculty, and getLocalFacultyUsers.
+
+What was optimized
+index() now avoids large full-table get() loads
+Replaced full submission load with SQL aggregates for:
+total submissions
+distinct evaluated instructors
+Recent reports now use paginated query (paginate(10)) instead of loading all rows then slicing.
+Grade lookup for recent reports is batched and scoped only to rows on the current recent page.
+Restored rating_percentage in recent report rows.
+Removed accidental duplicate final_grade assignment.
+Faculty card SEF ratings are no longer queried per-faculty
+Removed per-faculty SupervisorEvaluationSubmission::...->get() calls.
+Added batched SEF average computation for all faculty user IDs in one aggregated pass.
+Uses SQL JSON aggregation (JSON_TABLE) when supported, with safe cursor fallback if not supported by DB engine.
+faculty() now uses paginated external subject query
+Subjects are queried directly from lnu_poes.enrollment_courses with pagination (subjects_page, configurable per_page).
+Supports school_year_id filtering at query level.
+Latest submission and latest grade are fetched with grouped SQL (MAX(id) ... GROUP BY course_code) and then loaded in one batched query each.
+Removed heavy all-submission/all-grade per-course in-memory derivation.
+getLocalFacultyUsers() now returns lightweight data
+No longer loads all subject rows for every faculty.
+Uses one grouped query to get only subjects_count per id_no.
+Keeps response shape compatible (subjects still present as empty array, plus subjects_count).
+Added reusable helpers for rating computation
+ratingsToPercent(...)
+getUserSefAverageRating(...)
+getFacultySefAverages(...)
+These centralize computation and include SQL-first + fallback behavior.

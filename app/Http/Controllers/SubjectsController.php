@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Traits\FacultyData;
@@ -30,30 +29,53 @@ class SubjectsController extends Controller
             $normalizedIdNo = preg_replace('/\s+/', '', (string) ($currentUser?->id_no ?? ''));
 
             $rows = PoesSubjects::query()
-                ->where(function ($q) use ($currentUser, $lastName) {
-                    $idNo = $currentUser?->id_no;
+            ->where(function ($q) use ($currentUser, $lastName, $normalizedIdNo) {
+                $idNo = $currentUser?->id_no;
 
-                    if ($idNo) {
-                        $q->orWhereRaw('CAST(id_number AS CHAR) = ?', [(string) $idNo]);
-                    }
+                if ($idNo) {
+                    $q->orWhereRaw('CAST(id_number AS CHAR) = ?', [(string) $idNo]);
+                    $q->orWhereRaw('CAST(id_no AS CHAR) = ?', [(string) $idNo]);
+                }
 
-                    if ($idNo) {
-                        $q->orWhereRaw('CAST(id_no AS CHAR) = ?', [(string) $idNo]);
-                    }
+                if ($normalizedIdNo) {
+                    $q->orWhereRaw('CAST(id_number AS CHAR) = ?', [$normalizedIdNo]);
+                }
 
-                    if ($lastName !== '') {
-                        $q->orWhereRaw('LOWER(TRIM(instructor)) LIKE ?', ['%' . mb_strtolower(trim($lastName)) . '%']);
-                    }
-                })
-                ->get();
+                if ($lastName !== '') {
+                    $q->orWhereRaw(
+                        'LOWER(TRIM(instructor)) LIKE ?',
+                        ['%' . mb_strtolower(trim($lastName)) . '%']
+                    );
+                }
+            })
+            ->paginate(10)->withQueryString();
 
-            if ($rows->isEmpty() && $normalizedIdNo !== '') {
-                $rows = PoesSubjects::query()
-                    ->whereRaw('CAST(id_number AS CHAR) = ?', [$normalizedIdNo], 'and')
-                    ->get();
-            }
+            $baseQuery = PoesSubjects::query()
+            ->where(function ($q) use ($currentUser, $lastName, $normalizedIdNo) {
+                $idNo = $currentUser?->id_no;
+
+                if ($idNo) {
+                    $q->orWhereRaw('CAST(id_number AS CHAR) = ?', [(string) $idNo]);
+                    $q->orWhereRaw('CAST(id_no AS CHAR) = ?', [(string) $idNo]);
+                }
+
+                if ($normalizedIdNo) {
+                    $q->orWhereRaw('CAST(id_number AS CHAR) = ?', [$normalizedIdNo]);
+                }
+
+                if ($lastName !== '') {
+                    $q->orWhereRaw(
+                        'LOWER(TRIM(instructor)) LIKE ?',
+                        ['%' . mb_strtolower(trim($lastName)) . '%']
+                    );
+                }
+            })
+            ->orderByRaw('CAST(school_year_id AS UNSIGNED) DESC')
+            ->orderByDesc('id');
+
+        $rows = $baseQuery->paginate(10)->withQueryString();
         } catch (\Exception $e) {
-            $rows = collect();
+            $rows = PoesSubjects::query()->paginate(10);
         }
 
         $schoolYearMetaById = [];
@@ -103,6 +125,7 @@ class SubjectsController extends Controller
                 if ($idColumn !== null) {
                     $schoolYearRows = DB::connection('lnu_poes')
                         ->table($schoolYearTable)
+                        ->orderByDesc(DB::raw("CAST({$yearFromColumn} AS UNSIGNED)"))
                         ->selectRaw($idColumn . ' as ref_id')
                         ->when($semesterColumn !== null, function ($query) use ($semesterColumn) {
                             $query->selectRaw($semesterColumn . ' as ref_semester');
@@ -153,7 +176,7 @@ class SubjectsController extends Controller
                 return trim((string) $value);
             })
             ->unique()
-            ->sort()
+            ->sortDesc()
             ->values()
             ->all();
 
@@ -162,6 +185,7 @@ class SubjectsController extends Controller
                 $availableTerms = PoesSubjects::query()
                     ->select('school_year_id')
                     ->whereNotNull('school_year_id')
+                    ->orderByDesc('school_year_id')
                     ->distinct()
                     ->pluck('school_year_id')
                     ->map(function ($schoolYearId) use ($schoolYearMetaById) {
@@ -178,7 +202,7 @@ class SubjectsController extends Controller
                         return is_string($value) && trim($value) !== '';
                     })
                     ->unique()
-                    ->sort()
+                    ->sortDesc()
                     ->values()
                     ->all();
             } catch (\Exception $e) {
@@ -186,7 +210,7 @@ class SubjectsController extends Controller
             }
         }
 
-        $subjects = $rows->map(function ($row) use ($schoolYearMetaById) {
+        $subjects = collect($rows->items())->map(function ($row) use ($schoolYearMetaById) {
             $row = is_array($row) ? $row : (method_exists($row, 'toArray') ? $row->toArray() : (array) $row);
 
             $schoolYearId = isset($row['school_year_id']) ? (string) $row['school_year_id'] : '';
@@ -219,6 +243,12 @@ class SubjectsController extends Controller
 
         $subjectsProps = $this->commonInertiaProps($currentUser, [
             'subjects' => $subjects,
+            'subjectPagination' => [
+                'current_page' => $rows->currentPage(),
+                'last_page' => $rows->lastPage(),
+                'per_page' => $rows->perPage(),
+                'total' => $rows->total(),
+            ],
             'availableTerms' => $availableTerms,
             'hasPendingEvaluations' => UnitHeadGrade::query()
                 ->where('user_id', $currentUser->id)
