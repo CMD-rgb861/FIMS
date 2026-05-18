@@ -9,6 +9,7 @@ use App\Models\UnitHeadGrade;
 use App\Models\User;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Http\Request;
 
 class ReportsController extends Controller
@@ -18,7 +19,6 @@ class ReportsController extends Controller
     public function index(Request $request)
     {
         $currentUser = $request->user();
-        $facultyEvaluations = $this->getLocalFacultyUsers($currentUser);
         $termParam = $request->query('term', null);
 
         $activeTerm = DB::connection('lnu_poes')
@@ -31,6 +31,8 @@ class ReportsController extends Controller
         $termId = (!$termParam || $termParam === 'current' || $termParam === 'all')
             ? $activeTermId
             : (is_numeric($termParam) ? (int) $termParam : $activeTermId);
+
+        $facultyEvaluations = $this->getLocalFacultyUsers($currentUser, $termId);
 
         $allSubmissionsQuery = SupervisorEvaluationSubmission::query()
             ->where('user_id', $currentUser->id);
@@ -129,13 +131,23 @@ class ReportsController extends Controller
 
         $setStats = collect();
         if (!empty($allInstructorIds)) {
-            $setRows = DB::connection('lnu_poes')
+            $setQuery = DB::connection('lnu_poes')
                 ->table('student_evaluation_submissions')
                 ->select('instructor_id', DB::raw('COUNT(DISTINCT student_id_number) as total_evaluators'), DB::raw('AVG(total_score) as average_score'))
-                ->whereIn('instructor_id', $allInstructorIds)
-                ->groupBy('instructor_id')
-                ->get();
+                ->whereIn('instructor_id', $allInstructorIds);
 
+            $setYearColumn = null;
+            if (Schema::connection('lnu_poes')->hasColumn('student_evaluation_submissions', 'school_year_id')) {
+                $setYearColumn = 'school_year_id';
+            } elseif (Schema::connection('lnu_poes')->hasColumn('student_evaluation_submissions', 'term')) {
+                $setYearColumn = 'term';
+            }
+
+            if ($termId && $setYearColumn !== null) {
+                $setQuery->where($setYearColumn, $termId);
+            }
+            
+            $setRows = $setQuery->groupBy('instructor_id')->get();
             $setStats = $setRows->keyBy(fn ($r) => (string) $r->instructor_id);
         }
 
@@ -146,7 +158,7 @@ class ReportsController extends Controller
             ->values()
             ->all();
 
-        $sefAveragesByUser = $this->getFacultySefAverages($facultyUserIds);
+        $sefAveragesByUser = $this->getFacultySefAverages($facultyUserIds, $termId);
 
         $facultyList = collect($facultyEvaluations)
             ->map(function ($faculty, $index) use ($evaluatedInstructors, $setStats, $sefAveragesByUser) {
@@ -208,6 +220,32 @@ class ReportsController extends Controller
             ->values()
             ->all();
 
+        // Get school years for filters
+        $schoolYears = DB::connection('lnu_poes')
+            ->table('school_years')
+            ->select(
+                'id as value',
+                DB::raw("
+                    CONCAT(
+                        school_year_from,
+                        '-',
+                        school_year_to,
+                        ' - ',
+                        CASE
+                            WHEN semester = 1 THEN '1st Semester'
+                            WHEN semester = 2 THEN '2nd Semester'
+                            WHEN semester = 3 THEN 'Summer'
+                            ELSE CONCAT('Semester ', semester)
+                        END
+                    ) as label
+                ")
+            )
+            ->orderByDesc('school_year_to')
+            ->orderByDesc('school_year_from')
+            ->orderByDesc('semester')
+            ->get()
+            ->toArray();
+
         $reportsProps = $this->commonInertiaProps($currentUser, [
             'reportSummary' => [
                 [
@@ -240,6 +278,8 @@ class ReportsController extends Controller
             ],
             'facultyList' => $facultyList,
             'hasPendingEvaluations' => $evaluatedInstructors->count() < count($facultyEvaluations),
+            'schoolYears' => $schoolYears,
+            'selectedSchoolYear' => $termId,
         ]);
 
         return Inertia::render('ReportsPage', $reportsProps);
@@ -248,17 +288,6 @@ class ReportsController extends Controller
     public function faculty(Request $request, string $instructor)
     {
         $currentUser = $request->user();
-        $facultyEvaluations = $this->getLocalFacultyUsers($currentUser);
-
-        $facultyCollection = collect($facultyEvaluations);
-        $facultyIndex = $facultyCollection->search(function ($faculty) use ($instructor) {
-            return strcasecmp($faculty['instructor'], $instructor) === 0;
-        });
-
-        abort_if($facultyIndex === false, 404);
-
-        $facultyMeta = $facultyCollection->get($facultyIndex);
-        $employeeIdNo = $facultyMeta['id_no'] ?? 'EMP-' . str_pad((string) ($facultyIndex + 1), 3, '0', STR_PAD_LEFT);
         $termParam = $request->query('term', null);
 
         $activeTerm = DB::connection('lnu_poes')
@@ -272,6 +301,18 @@ class ReportsController extends Controller
             ? $activeTermId
             : (is_numeric($termParam) ? (int) $termParam : $activeTermId);
 
+        $facultyEvaluations = $this->getLocalFacultyUsers($currentUser, $selectedSchoolYear);
+
+        $facultyCollection = collect($facultyEvaluations);
+        $facultyIndex = $facultyCollection->search(function ($faculty) use ($instructor) {
+            return strcasecmp($faculty['instructor'], $instructor) === 0;
+        });
+
+        abort_if($facultyIndex === false, 404);
+
+        $facultyMeta = $facultyCollection->get($facultyIndex);
+        $employeeIdNo = $facultyMeta['id_no'] ?? 'EMP-' . str_pad((string) ($facultyIndex + 1), 3, '0', STR_PAD_LEFT);
+
         $perPage = (int) $request->input('per_page', 10);
         $perPage = max(10, min($perPage, 200));
 
@@ -284,18 +325,15 @@ class ReportsController extends Controller
         }
 
         $subjectsPage = $subjectsQuery
-        ->select(
-            'id',
-            'course_code',
-            'course_description',
-            'year_level',
-            'section_code',
-            'school_year_id'
-        )
+        ->selectRaw('MIN(id) as id')
+        ->select('course_code', 'course_description', 'school_year_id')
+        ->selectRaw("MAX(NULLIF(TRIM(year_level), '')) as year_level")
+        ->selectRaw("COALESCE(NULLIF(TRIM(section_code), ''), '') as section_code")
+        ->groupBy('course_code', 'course_description', 'school_year_id')
+        ->groupByRaw("COALESCE(NULLIF(TRIM(section_code), ''), '')")
         ->orderBy('course_code')
         ->paginate($perPage)
         ->appends($request->query());
-
         $subjectRows = collect($subjectsPage->items());
         $courseCodes = $subjectRows
             ->pluck('course_code')
@@ -478,7 +516,7 @@ class ReportsController extends Controller
      * - Unit heads see users in their unit
      * - Faculty/others see empty list
      */
-    private function getLocalFacultyUsers($user): array
+    private function getLocalFacultyUsers($user, ?int $selectedSchoolYearId = null): array
     {
         if (!$user) {
             return [];
@@ -514,10 +552,19 @@ class ReportsController extends Controller
         $subjectCountsByIdNo = collect();
         if (!empty($idNos)) {
             try {
-                $subjectCountsByIdNo = DB::connection('lnu_poes')
+                $subjectCountsQuery = DB::connection('lnu_poes')
                     ->table('enrollment_courses')
-                    ->whereIn('id_no', $idNos)
-                    ->select('id_no', DB::raw('COUNT(*) as subjects_count'))
+                    ->whereIn('id_no', $idNos);
+
+                if ($selectedSchoolYearId !== null) {
+                    $subjectCountsQuery->where('school_year_id', $selectedSchoolYearId);
+                }
+
+                $subjectCountsByIdNo = $subjectCountsQuery
+                    ->select(
+                        'id_no',
+                        DB::raw('COUNT(DISTINCT course_code, course_description, year_level, section_code, school_year_id) as subjects_count')
+                    )
                     ->groupBy('id_no')
                     ->pluck('subjects_count', 'id_no');
             } catch (\Exception $e) {
@@ -602,31 +649,38 @@ class ReportsController extends Controller
             }
         }
 
-    private function getFacultySefAverages(array $facultyUserIds)
+    private function getFacultySefAverages(array $facultyUserIds, ?int $termId = null)
     {
         if (empty($facultyUserIds)) {
             return collect();
         }
 
         try {
-            $rows = DB::table('supervisor_evaluation_submissions')
+            $query = DB::table('supervisor_evaluation_submissions')
                 ->whereIn('user_id', $facultyUserIds, 'and', false)
                 ->select('user_id')
                 ->selectRaw(
                     "ROUND(AVG((SELECT COALESCE(SUM(j.value), 0) FROM JSON_TABLE(ratings, '$.*' COLUMNS (value DECIMAL(10,2) PATH '$')) AS j) / 75 * 100), 2) as avg_rating"
-                )
-                ->groupBy('user_id')
-                ->get();
+                );
+            
+            if ($termId) {
+                $query->where('term', $termId);
+            }
+            
+            $rows = $query->groupBy('user_id')->get();
 
             return $rows->pluck('avg_rating', 'user_id');
         } catch (\Throwable $e) {
             $accumulator = [];
-            foreach (
-                SupervisorEvaluationSubmission::query()
-                    ->whereIn('user_id', $facultyUserIds, 'and', false)
-                    ->select('user_id', 'ratings')
-                    ->cursor() as $row
-            ) {
+            $baseQuery = SupervisorEvaluationSubmission::query()
+                ->whereIn('user_id', $facultyUserIds, 'and', false)
+                ->select('user_id', 'ratings');
+            
+            if ($termId) {
+                $baseQuery->where('term', $termId);
+            }
+            
+            foreach ($baseQuery->cursor() as $row) {
                 $uid = (int) $row->user_id;
                 if (!isset($accumulator[$uid])) {
                     $accumulator[$uid] = ['sum' => 0.0, 'count' => 0];

@@ -183,3 +183,8 @@ ratingsToPercent(...)
 getUserSefAverageRating(...)
 getFacultySefAverages(...)
 These centralize computation and include SQL-first + fallback behavior.
+
+
+UPDATE=
+
+MOSTLY ARE OPTIMIZED AND USES PAGINATION, the only page that has no pagination is the ReportPage.jsx because it uses cards and still need to change something in the backend.
