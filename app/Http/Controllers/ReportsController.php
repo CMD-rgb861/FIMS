@@ -131,24 +131,92 @@ class ReportsController extends Controller
 
         $setStats = collect();
         if (!empty($allInstructorIds)) {
-            $setQuery = DB::connection('lnu_poes')
-                ->table('student_evaluation_submissions')
-                ->select('instructor_id', DB::raw('COUNT(DISTINCT student_id_number) as total_evaluators'), DB::raw('AVG(total_score) as average_score'))
-                ->whereIn('instructor_id', $allInstructorIds);
+            $subjectIdsByIdNo = collect();
+            $allSubjectIds = [];
 
-            $setYearColumn = null;
-            if (Schema::connection('lnu_poes')->hasColumn('student_evaluation_submissions', 'school_year_id')) {
-                $setYearColumn = 'school_year_id';
-            } elseif (Schema::connection('lnu_poes')->hasColumn('student_evaluation_submissions', 'term')) {
-                $setYearColumn = 'term';
+            if (!empty($allIdNos)) {
+                $subjectRowsQuery = DB::connection('lnu_poes')
+                    ->table('enrollment_courses')
+                    ->whereIn('id_no', $allIdNos);
+
+                if ($termId !== null) {
+                    $subjectRowsQuery->where('school_year_id', $termId);
+                }
+
+                $subjectRows = $subjectRowsQuery
+                    ->select('id', 'id_no')
+                    ->get();
+
+                $subjectIdsByIdNo = $subjectRows
+                    ->groupBy('id_no')
+                    ->map(fn ($rows) => $rows->pluck('id')->map(fn ($id) => (int) $id)->values());
+
+                $allSubjectIds = $subjectRows
+                    ->pluck('id')
+                    ->filter()
+                    ->unique()
+                    ->map(fn ($id) => (int) $id)
+                    ->values()
+                    ->all();
             }
 
-            if ($termId && $setYearColumn !== null) {
-                $setQuery->where($setYearColumn, $termId);
+            if (!empty($allSubjectIds)) {
+                $setRows = DB::connection('lnu_poes')
+                    ->table('student_evaluation_submissions')
+                    ->select(
+                        'instructor_id',
+                        'subject_id',
+                        DB::raw('COUNT(DISTINCT student_id_number) as students'),
+                        DB::raw('AVG(total_score) as avg_score')
+                    )
+                    ->whereIn('instructor_id', $allInstructorIds)
+                    ->whereIn('subject_id', $allSubjectIds)
+                    ->groupBy('instructor_id')
+                    ->groupBy('subject_id')
+                    ->get();
+
+                $acc = [];
+                foreach ($setRows as $row) {
+                    $iid = (string) $row->instructor_id;
+                    $students = (int) ($row->students ?? 0);
+                    $avg = $row->avg_score !== null ? (float) $row->avg_score : null;
+
+                    if (!isset($acc[$iid])) {
+                        $acc[$iid] = [
+                            'students_sum' => 0,
+                            'weighted_sum' => 0,
+                        ];
+                    }
+
+                    if ($avg !== null && $students > 0) {
+                        $acc[$iid]['students_sum'] += $students;
+                        $acc[$iid]['weighted_sum'] += $students * $avg;
+                    }
+                }
+
+                foreach ($acc as $iid => $data) {
+                    $overall = null;
+                    if ($data['students_sum'] > 0) {
+                        $overall = round($data['weighted_sum'] / $data['students_sum'], 2);
+                    }
+
+                    $setStats[$iid] = (object) [
+                        'students_sum' => $data['students_sum'],
+                        'weighted_sum' => $data['weighted_sum'],
+                        'overall_score' => $overall,
+                    ];
+                }
+            } else {
+                // Fallback when we cannot map subjects for the selected term.
+                $setRows = DB::connection('lnu_poes')
+                    ->table('student_evaluation_submissions')
+                    ->select('instructor_id', DB::raw('COUNT(DISTINCT student_id_number) as total_evaluators'), DB::raw('AVG(total_score) as average_score'))
+                    ->whereIn('instructor_id', $allInstructorIds)
+                    ->groupBy('instructor_id')
+                    ->get();
+
+                $setStats = $setRows->keyBy(fn ($r) => (string) $r->instructor_id);
             }
-            
-            $setRows = $setQuery->groupBy('instructor_id')->get();
-            $setStats = $setRows->keyBy(fn ($r) => (string) $r->instructor_id);
         }
 
         $facultyUserIds = collect($facultyEvaluations)
@@ -195,7 +263,9 @@ class ReportsController extends Controller
                         }
 
                         if ($setRow) {
-                            if ($setRow->average_score !== null && $setRow->total_evaluators > 0) {
+                            if (isset($setRow->overall_score) && $setRow->overall_score !== null) {
+                                $overallSetRating = $setRow->overall_score;
+                            } elseif (isset($setRow->average_score) && $setRow->average_score !== null && ($setRow->total_evaluators ?? 0) > 0) {
                                 $overallSetRating = round($setRow->average_score, 2);
                             }
                         }
@@ -446,9 +516,11 @@ class ReportsController extends Controller
                             'no_of_students' => null,
                             'average_set_rating' => $setGrade !== null ? number_format((float) $setGrade, 2) : '-',
                             'weighted_set_score' => '-',
+                            'total_set' => '-',
                             'no_of_students_value' => null,
                             'average_set_rating_value' => $setGrade !== null ? (float) $setGrade : null,
                             'weighted_set_score_value' => null,
+                            'total_set_value' => null,
                         ],
                     ],
                 ];

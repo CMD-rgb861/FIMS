@@ -117,9 +117,11 @@ class ReportEvaluationController extends Controller
                         'no_of_students' => null,
                         'average_set_rating' => '-',
                         'weighted_set_score' => '-',
+                        'total_set' => '-',
                         'no_of_students_value' => 0,
                         'average_set_rating_value' => null,
                         'weighted_set_score_value' => null,
+                        'total_set_value' => null,
                     ],
                 ];
 
@@ -142,6 +144,11 @@ class ReportEvaluationController extends Controller
             ? $averageScore * $totalEvaluators
             : null;
 
+        $totalSet = null;
+        if ($weightedScore !== null && $totalEvaluators > 0) {
+            $totalSet = $weightedScore / $totalEvaluators;
+        }
+
         $setBreakdown = [
             [
                 'seq' => 1,
@@ -150,9 +157,11 @@ class ReportEvaluationController extends Controller
                 'no_of_students' => $totalEvaluators > 0 ? $totalEvaluators : null,
                 'average_set_rating' => $averageScore !== null ? number_format($averageScore, 2) : '-',
                 'weighted_set_score' => $weightedScore !== null ? number_format($weightedScore, 2) : '-',
+                'total_set' => $totalSet !== null ? number_format($totalSet, 2) : '-',
                 'no_of_students_value' => $totalEvaluators,
                 'average_set_rating_value' => $averageScore,
                 'weighted_set_score_value' => $weightedScore,
+                'total_set_value' => $totalSet,
             ],
         ];
 

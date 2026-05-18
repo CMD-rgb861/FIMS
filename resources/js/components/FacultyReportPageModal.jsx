@@ -90,6 +90,9 @@ export default function FacultyReportPageModal({
                                 <th className="px-4 py-2.5 text-left font-semibold text-slate-600">
                                     (3 x 5) Weighted SET Score
                                 </th>
+                                <th className="px-4 py-2.5 text-left font-semibold text-slate-600">
+                                    Total SET
+                                </th>
                             </tr>
                         </thead>
 
@@ -120,12 +123,22 @@ export default function FacultyReportPageModal({
                                         <td className="px-4 py-2.5 text-slate-700">
                                             {item.weighted_set_score}
                                         </td>
+                                        <td className="px-4 py-2.5 text-slate-700">
+                                            {item.total_set_value !== null && item.total_set_value !== undefined
+                                                ? Number(item.total_set_value).toFixed(2)
+                                                : (item.weighted_set_score_value !== null && item.weighted_set_score_value !== undefined && item.no_of_students_value && Number(item.no_of_students_value) > 0)
+                                                    ? (Number(item.weighted_set_score_value) / Number(item.no_of_students_value)).toFixed(2)
+                                                    : (item.weighted_set_score_value !== null && item.weighted_set_score_value !== undefined)
+                                                        ? Number(item.weighted_set_score_value).toFixed(2)
+                                                        : '-'
+                                            }
+                                        </td>
                                     </tr>
                                 ))
                             ) : (
                                 <tr>
                                     <td
-                                        colSpan={6}
+                                        colSpan={7}
                                         className="px-4 py-6 text-center text-slate-500"
                                     >
                                         No SET breakdown data available.
