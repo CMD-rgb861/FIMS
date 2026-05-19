@@ -1,9 +1,69 @@
 //INDIVIDUAL FACULTY REPORT BREAKDOWN MODAL COMPONENT
 
+const extractYearLevelFromSectionCode = (sectionCode) => {
+    const digits = String(sectionCode ?? '').match(/\d/g) ?? [];
+
+    if (digits.length >= 2) {
+        return digits[digits.length - 2];
+    }
+
+    if (digits.length === 1) {
+        return digits[0];
+    }
+
+    return '';
+};
+
+const normalizeYearSectionLabel = (value) => {
+    const label = String(value ?? '').trim();
+
+    if (!label) {
+        return '-';
+    }
+
+    const yearSectionMatch = label.match(/^Year\s*([0-9]+)\s*-\s*(.+)$/i);
+    if (yearSectionMatch) {
+        const sectionCode = yearSectionMatch[2].trim();
+        const yearLevel = extractYearLevelFromSectionCode(sectionCode) || yearSectionMatch[1];
+
+        return sectionCode ? `${yearLevel}-${sectionCode}` : yearLevel;
+    }
+
+    const compactMatch = label.match(/^([0-9]+)\s*-\s*(.+)$/);
+    if (compactMatch) {
+        const sectionCode = compactMatch[2].trim();
+        const yearLevel = extractYearLevelFromSectionCode(sectionCode) || compactMatch[1];
+
+        return sectionCode ? `${yearLevel}-${sectionCode}` : yearLevel;
+    }
+
+    if (/^Year\s*[0-9]+$/i.test(label)) {
+        return label.replace(/^Year\s*/i, '').trim();
+    }
+
+    const inferredYearLevel = extractYearLevelFromSectionCode(label);
+    if (inferredYearLevel) {
+        return `${inferredYearLevel}-${label}`;
+    }
+
+    return label;
+};
+
+const normalizeCourseCode = (value) => {
+    const courseCode = String(value ?? '').trim();
+
+    if (!courseCode || courseCode === '-') {
+        return '';
+    }
+
+    return courseCode;
+};
+
 export default function FacultyReportPageModal({
     isOpen,
     onClose,
     setBreakdownRows = [],
+    selectedCourseCode = '',
     selectedSefBreakdown = null,
     isLoading = false,
     errorMessage = '',
@@ -105,11 +165,11 @@ export default function FacultyReportPageModal({
                                         </td>
 
                                         <td className="px-4 py-2.5 text-slate-700">
-                                            {item.course_code}
+                                            {normalizeCourseCode(item.course_code) || selectedCourseCode || '-'}
                                         </td>
 
                                         <td className="px-4 py-2.5 text-slate-700">
-                                            {item.year_section}
+                                            {normalizeYearSectionLabel(item.year_section)}
                                         </td>
 
                                         <td className="px-4 py-2.5 text-slate-700">

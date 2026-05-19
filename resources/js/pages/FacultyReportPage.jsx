@@ -4,6 +4,55 @@ import AppLayout from '../Layouts/AppLayout';
 import { router } from '@inertiajs/react';
 import FacultyReportPageModal from '../components/FacultyReportPageModal';
 
+const extractYearLevelFromSectionCode = (sectionCode) => {
+    const digits = String(sectionCode ?? '').match(/\d/g) ?? [];
+
+    if (digits.length >= 2) {
+        return digits[digits.length - 2];
+    }
+
+    if (digits.length === 1) {
+        return digits[0];
+    }
+
+    return '';
+};
+
+const normalizeYearSectionLabel = (value) => {
+    const label = String(value ?? '').trim();
+
+    if (!label) {
+        return '-';
+    }
+
+    const yearSectionMatch = label.match(/^Year\s*([0-9]+)\s*-\s*(.+)$/i);
+    if (yearSectionMatch) {
+        const sectionCode = yearSectionMatch[2].trim();
+        const yearLevel = extractYearLevelFromSectionCode(sectionCode) || yearSectionMatch[1];
+
+        return sectionCode ? `${yearLevel}-${sectionCode}` : yearLevel;
+    }
+
+    const compactMatch = label.match(/^([0-9]+)\s*-\s*(.+)$/);
+    if (compactMatch) {
+        const sectionCode = compactMatch[2].trim();
+        const yearLevel = extractYearLevelFromSectionCode(sectionCode) || compactMatch[1];
+
+        return sectionCode ? `${yearLevel}-${sectionCode}` : yearLevel;
+    }
+
+    if (/^Year\s*[0-9]+$/i.test(label)) {
+        return label.replace(/^Year\s*/i, '').trim();
+    }
+
+    const inferredYearLevel = extractYearLevelFromSectionCode(label);
+    if (inferredYearLevel) {
+        return `${inferredYearLevel}-${label}`;
+    }
+
+    return label;
+};
+
 export default function FacultyReportPage({
     tablePagination = null,
     appName = 'FIMS',
@@ -24,6 +73,7 @@ export default function FacultyReportPage({
 }) {
     const [isSetModalOpen, setIsSetModalOpen] = useState(false);
     const [setBreakdownRows, setSetBreakdownRows] = useState([]);
+    const [selectedCourseCode, setSelectedCourseCode] = useState('');
     const [selectedSefBreakdown, setSelectedSefBreakdown] = useState(null);
     const [isModalLoading, setIsModalLoading] = useState(false);
     const [modalError, setModalError] = useState('');
@@ -40,6 +90,7 @@ export default function FacultyReportPage({
     // available school year so the list is filtered immediately.
     const openSetModal = async (row) => {
         setModalError('');
+        setSelectedCourseCode(row?.course_code ?? '');
         setSetBreakdownRows(Array.isArray(row?.set_breakdown) ? row.set_breakdown : []);
         setSelectedSefBreakdown({
             total_score: row?.sef_total_score ?? null,
@@ -70,6 +121,7 @@ export default function FacultyReportPage({
     const closeSetModal = () => {
         setIsSetModalOpen(false);
         setSetBreakdownRows([]);
+        setSelectedCourseCode('');
         setSelectedSefBreakdown(null);
         setIsModalLoading(false);
         setModalError('');
@@ -221,7 +273,7 @@ export default function FacultyReportPage({
                                         </td>
 
                                         <td className="px-5 py-3 text-slate-700">
-                                            {row.year_section || '-'}
+                                            {normalizeYearSectionLabel(row.year_section)}
                                         </td>
 
                                         <td className="px-5 py-3 text-slate-700">
@@ -279,6 +331,7 @@ export default function FacultyReportPage({
                     isOpen={isSetModalOpen}
                     onClose={closeSetModal}
                     setBreakdownRows={setBreakdownRows}
+                    selectedCourseCode={selectedCourseCode}
                     selectedSefBreakdown={selectedSefBreakdown}
                     isLoading={isModalLoading}
                     errorMessage={modalError}

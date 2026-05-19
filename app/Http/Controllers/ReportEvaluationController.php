@@ -89,9 +89,11 @@ class ReportEvaluationController extends Controller
             ->get();
 
         if ($rows->isEmpty()) {
+            $normalizedCourseCode = trim((string) ($courseCode ?? ''));
+
             $setBreakdown = [[
                 'seq' => 1,
-                'course_code' => $courseCode ?: '-',
+                'course_code' => $normalizedCourseCode !== '' ? $normalizedCourseCode : null,
                 'year_section' => $yearSection ?: '-',
                 'no_of_students' => null,
                 'average_set_rating' => '-',
@@ -109,7 +111,7 @@ class ReportEvaluationController extends Controller
                 'last_submission' => null,
             ]];
         } else {
-            $setBreakdown = $rows->values()->map(function ($row, $index) use ($yearSection) {
+            $setBreakdown = $rows->values()->map(function ($row, $index) use ($yearSection, $courseCode) {
                 $uniqueStudents = (int) ($row->total_unique_students ?? 0);
                 $averageScore = $row->average_score !== null ? (float) $row->average_score : null;
                 $weightedScore = ($averageScore !== null && $uniqueStudents > 0)
@@ -117,13 +119,13 @@ class ReportEvaluationController extends Controller
                     : null;
                 $totalSet = $averageScore !== null ? $averageScore : null;
 
-                $yearLevel = trim((string) ($row->year_level ?? ''));
                 $sectionCode = trim((string) ($row->section_code ?? ''));
+                $yearLevel = $this->extractYearLevelFromSectionCode($sectionCode) ?? trim((string) ($row->year_level ?? ''));
 
                 if ($yearLevel !== '' && $sectionCode !== '') {
-                    $yearSectionLabel = 'Year ' . $yearLevel . '-' . $sectionCode;
+                    $yearSectionLabel = $yearLevel . '-' . $sectionCode;
                 } elseif ($yearLevel !== '') {
-                    $yearSectionLabel = 'Year ' . $yearLevel;
+                    $yearSectionLabel = $yearLevel;
                 } elseif ($sectionCode !== '') {
                     $yearSectionLabel = $sectionCode;
                 } else {
@@ -132,7 +134,9 @@ class ReportEvaluationController extends Controller
 
                 return [
                     'seq' => $index + 1,
-                    'course_code' => $row->course_code ?? '-',
+                    'course_code' => trim((string) ($row->course_code ?? '')) !== ''
+                        ? trim((string) $row->course_code)
+                        : ($courseCode !== null && trim((string) $courseCode) !== '' ? trim((string) $courseCode) : null),
                     'year_section' => $yearSectionLabel,
                     'no_of_students' => $uniqueStudents > 0 ? $uniqueStudents : null,
                     'average_set_rating' => $averageScore !== null ? number_format($averageScore, 2) : '-',
@@ -225,8 +229,28 @@ class ReportEvaluationController extends Controller
             return null;
         }
 
-        if (preg_match('/Year\s*([0-9]+)/i', $yearSection, $matches)) {
+        if (preg_match('/^(?:Year\s*)?([0-9]+)(?:\s*-\s*.*)?$/i', trim($yearSection), $matches)) {
             return $matches[1];
+        }
+
+        return null;
+    }
+
+    private function extractYearLevelFromSectionCode(?string $sectionCode): ?string
+    {
+        if ($sectionCode === null || $sectionCode === '') {
+            return null;
+        }
+
+        preg_match_all('/\d/', $sectionCode, $matches);
+        $digits = $matches[0] ?? [];
+
+        if (count($digits) >= 2) {
+            return $digits[count($digits) - 2];
+        }
+
+        if (count($digits) === 1) {
+            return $digits[0];
         }
 
         return null;

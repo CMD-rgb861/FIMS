@@ -340,12 +340,12 @@ class ReportsController extends Controller
                 $setGrade = $grade?->grade;
                 $status = ($setGrade !== null || $submission !== null) ? 'Evaluated' : 'For Evaluation';
 
-                $yearLevel = trim((string) ($subject->year_level ?? ''));
                 $sectionCode = trim((string) ($subject->section_code ?? ''));
+                $yearLevel = $this->extractYearLevelFromSectionCode($sectionCode) ?? trim((string) ($subject->year_level ?? ''));
                 if ($yearLevel !== '' && $sectionCode !== '') {
-                    $term = 'Year ' . $yearLevel . '-' . $sectionCode;
+                    $term = $yearLevel . '-' . $sectionCode;
                 } elseif ($yearLevel !== '') {
-                    $term = 'Year ' . $yearLevel;
+                    $term = $yearLevel;
                 } elseif ($sectionCode !== '') {
                     $term = $sectionCode;
                 } else {
@@ -704,5 +704,25 @@ class ReportsController extends Controller
                 return round(((float) $v['sum']) / ((int) $v['count']), 2);
             });
         }
+    }
+
+    private function extractYearLevelFromSectionCode(?string $sectionCode): ?string
+    {
+        if ($sectionCode === null || $sectionCode === '') {
+            return null;
+        }
+
+        preg_match_all('/\d/', $sectionCode, $matches);
+        $digits = $matches[0] ?? [];
+
+        if (count($digits) >= 2) {
+            return $digits[count($digits) - 2];
+        }
+
+        if (count($digits) === 1) {
+            return $digits[0];
+        }
+
+        return null;
     }
 }
