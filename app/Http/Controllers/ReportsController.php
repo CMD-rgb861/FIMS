@@ -257,23 +257,42 @@ class ReportsController extends Controller
         $perPage = max(10, min($perPage, 200));
 
         $subjectsQuery = DB::connection('lnu_poes')
-            ->table('enrollment_courses')
-            ->where('id_no', $facultyMeta['id_no'] ?? '');
+            ->table('enrollment_courses as ec');
+
+        $instructorTokens = $this->extractInstructorTokens($facultyMeta['instructor'] ?? null);
+
+        $subjectsQuery->where(function ($nested) use ($instructorTokens, $facultyMeta) {
+            $hasTokens = ! empty($instructorTokens);
+
+            if ($hasTokens) {
+                foreach ($instructorTokens as $token) {
+                    $nested->where('ec.instructor', 'like', '%' . $token . '%');
+                }
+            }
+
+            if (! empty($facultyMeta['id_no'])) {
+                if ($hasTokens) {
+                    $nested->orWhere('ec.id_no', $facultyMeta['id_no']);
+                } else {
+                    $nested->where('ec.id_no', $facultyMeta['id_no']);
+                }
+            }
+        });
 
         if ($selectedSchoolYear !== '') {
             $subjectsQuery->where('school_year_id', $selectedSchoolYear);
         }
 
         $subjectsPage = $subjectsQuery
-        ->selectRaw('MIN(id) as id')
-        ->select('course_code', 'course_description', 'school_year_id')
-        ->selectRaw("MAX(NULLIF(TRIM(year_level), '')) as year_level")
-        ->selectRaw("COALESCE(NULLIF(TRIM(section_code), ''), '') as section_code")
-        ->groupBy('course_code', 'course_description', 'school_year_id')
-        ->groupByRaw("COALESCE(NULLIF(TRIM(section_code), ''), '')")
-        ->orderBy('course_code')
-        ->paginate($perPage)
-        ->appends($request->query());
+            ->selectRaw('MIN(ec.id) as id')
+            ->select('ec.course_code', 'ec.course_description', 'ec.school_year_id')
+            ->selectRaw("MAX(NULLIF(TRIM(ec.year_level), '')) as year_level")
+            ->selectRaw("COALESCE(NULLIF(TRIM(ec.section_code), ''), '') as section_code")
+            ->groupBy('ec.course_code', 'ec.course_description', 'ec.school_year_id')
+            ->groupByRaw("COALESCE(NULLIF(TRIM(ec.section_code), ''), '')")
+            ->orderBy('ec.course_code')
+            ->paginate($perPage)
+            ->appends($request->query());
         $subjectRows = collect($subjectsPage->items());
         $courseCodes = $subjectRows
             ->pluck('course_code')
@@ -542,6 +561,19 @@ class ReportsController extends Controller
                 'id_no' => $localUser->id_no,
             ];
         })->values()->all();
+    }
+
+    private function extractInstructorTokens(?string $instructor): array
+    {
+        if ($instructor === null) {
+            return [];
+        }
+
+        $tokens = preg_split('/[^\pL\pN]+/u', mb_strtoupper(trim($instructor))) ?: [];
+
+        return array_values(array_filter($tokens, function ($token) {
+            return mb_strlen($token) > 1;
+        }));
     }
 
     private function getFacultyOverallSetRating(?string $instructor, ?int $termId = null): ?float
