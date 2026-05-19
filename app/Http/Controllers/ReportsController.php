@@ -114,111 +114,6 @@ class ReportsController extends Controller
             ->values()
             ->all();
 
-        // Batch SET statistics for all faculty (single external query)
-        $allIdNos = collect($facultyEvaluations)
-            ->pluck('id_no')
-            ->filter()
-            ->unique()
-            ->values()
-            ->all();
-
-        $numericIds = collect($allIdNos)->map(function ($idNo) {
-            $digits = preg_replace('/\D+/', '', (string) $idNo);
-            return $digits !== '' ? $digits : null;
-        })->filter()->unique()->values()->all();
-
-        $allInstructorIds = array_values(array_unique(array_merge($allIdNos, $numericIds)));
-
-        $setStats = collect();
-        if (!empty($allInstructorIds)) {
-            $subjectIdsByIdNo = collect();
-            $allSubjectIds = [];
-
-            if (!empty($allIdNos)) {
-                $subjectRowsQuery = DB::connection('lnu_poes')
-                    ->table('enrollment_courses')
-                    ->whereIn('id_no', $allIdNos);
-
-                if ($termId !== null) {
-                    $subjectRowsQuery->where('school_year_id', $termId);
-                }
-
-                $subjectRows = $subjectRowsQuery
-                    ->select('id', 'id_no')
-                    ->get();
-
-                $subjectIdsByIdNo = $subjectRows
-                    ->groupBy('id_no')
-                    ->map(fn ($rows) => $rows->pluck('id')->map(fn ($id) => (int) $id)->values());
-
-                $allSubjectIds = $subjectRows
-                    ->pluck('id')
-                    ->filter()
-                    ->unique()
-                    ->map(fn ($id) => (int) $id)
-                    ->values()
-                    ->all();
-            }
-
-            if (!empty($allSubjectIds)) {
-                $setRows = DB::connection('lnu_poes')
-                    ->table('student_evaluation_submissions')
-                    ->select(
-                        'instructor_id',
-                        'subject_id',
-                        DB::raw('COUNT(DISTINCT student_id_number) as students'),
-                        DB::raw('AVG(total_score) as avg_score')
-                    )
-                    ->whereIn('instructor_id', $allInstructorIds)
-                    ->whereIn('subject_id', $allSubjectIds)
-                    ->groupBy('instructor_id')
-                    ->groupBy('subject_id')
-                    ->get();
-
-                $acc = [];
-                foreach ($setRows as $row) {
-                    $iid = (string) $row->instructor_id;
-                    $students = (int) ($row->students ?? 0);
-                    $avg = $row->avg_score !== null ? (float) $row->avg_score : null;
-
-                    if (!isset($acc[$iid])) {
-                        $acc[$iid] = [
-                            'students_sum' => 0,
-                            'weighted_sum' => 0,
-                        ];
-                    }
-
-                    if ($avg !== null && $students > 0) {
-                        $acc[$iid]['students_sum'] += $students;
-                        $acc[$iid]['weighted_sum'] += $students * $avg;
-                    }
-                }
-
-                foreach ($acc as $iid => $data) {
-                    $overall = null;
-                    if ($data['students_sum'] > 0) {
-                        $overall = round($data['weighted_sum'] / $data['students_sum'], 2);
-                    }
-
-                    $setStats[$iid] = (object) [
-                        'students_sum' => $data['students_sum'],
-                        'weighted_sum' => $data['weighted_sum'],
-                        'overall_score' => $overall,
-                    ];
-                }
-            } else {
-                // Fallback when we cannot map subjects for the selected term.
-                $setRows = DB::connection('lnu_poes')
-                    ->table('student_evaluation_submissions')
-                    ->select('instructor_id', DB::raw('COUNT(DISTINCT student_id_number) as total_evaluators'), DB::raw('AVG(total_score) as average_score'))
-                    ->whereIn('instructor_id', $allInstructorIds)
-                    ->groupBy('instructor_id')
-                    ->get();
-
-                $setStats = $setRows->keyBy(fn ($r) => (string) $r->instructor_id);
-            }
-        }
-
         $facultyUserIds = collect($facultyEvaluations)
             ->pluck('user_id')
             ->filter()
@@ -229,7 +124,7 @@ class ReportsController extends Controller
         $sefAveragesByUser = $this->getFacultySefAverages($facultyUserIds, $termId);
 
         $facultyList = collect($facultyEvaluations)
-            ->map(function ($faculty, $index) use ($evaluatedInstructors, $setStats, $sefAveragesByUser) {
+            ->map(function ($faculty, $index) use ($evaluatedInstructors, $sefAveragesByUser, $termId) {
                 /*
                 |----------------------------------------
                 | OVERALL SET RATING FOR FACULTY CARD
@@ -243,32 +138,7 @@ class ReportsController extends Controller
 
                 // Only calculate ratings if faculty has subjects
                 if ($subjectsCount > 0) {
-                        // Extract numeric ID from id_no (same way as in faculty detail page)
-                        $instructorIdRaw = $faculty['id_no'] ?? null;
-                        $instructorId = null;
-
-                        if ($instructorIdRaw !== null) {
-                            $digits = preg_replace('/\D+/', '', (string) $instructorIdRaw);
-                            if ($digits !== '') {
-                                $instructorId = $digits;
-                            }
-                        }
-
-                        // Lookup pre-fetched SET stats by either numeric or raw id
-                        $setRow = null;
-                        if ($instructorId !== null && isset($setStats[(string) $instructorId])) {
-                            $setRow = $setStats[(string) $instructorId];
-                        } elseif ($instructorIdRaw !== null && isset($setStats[(string) $instructorIdRaw])) {
-                            $setRow = $setStats[(string) $instructorIdRaw];
-                        }
-
-                        if ($setRow) {
-                            if (isset($setRow->overall_score) && $setRow->overall_score !== null) {
-                                $overallSetRating = $setRow->overall_score;
-                            } elseif (isset($setRow->average_score) && $setRow->average_score !== null && ($setRow->total_evaluators ?? 0) > 0) {
-                                $overallSetRating = round($setRow->average_score, 2);
-                            }
-                        }
+                    $overallSetRating = $this->getFacultyOverallSetRating($faculty['instructor'] ?? null, $termId);
 
                     $averageSefRating = $sefAveragesByUser->get((int) ($faculty['user_id'] ?? 0));
                     if ($averageSefRating !== null) {
@@ -672,6 +542,72 @@ class ReportsController extends Controller
                 'id_no' => $localUser->id_no,
             ];
         })->values()->all();
+    }
+
+    private function getFacultyOverallSetRating(?string $instructor, ?int $termId = null): ?float
+    {
+        if ($instructor === null || trim($instructor) === '') {
+            return null;
+        }
+
+        static $cache = [];
+
+        $cacheKey = mb_strtoupper(trim($instructor)) . '|' . ($termId ?? 'all');
+        if (array_key_exists($cacheKey, $cache)) {
+            return $cache[$cacheKey];
+        }
+
+        $tokens = preg_split('/[^\pL\pN]+/u', mb_strtoupper(trim($instructor))) ?: [];
+        $tokens = array_values(array_filter($tokens, function ($token) {
+            return mb_strlen($token) > 1;
+        }));
+
+        $query = DB::connection('lnu_poes')
+            ->table('enrollment_courses as ec')
+            ->join('student_evaluation_submissions as ses', 'ec.id', '=', 'ses.subject_id');
+
+        if (! empty($tokens)) {
+            $query->where(function ($nested) use ($tokens) {
+                foreach ($tokens as $token) {
+                    $nested->where('ec.instructor', 'like', '%' . $token . '%');
+                }
+            });
+        }
+
+        if ($termId !== null) {
+            $query->where('ec.school_year_id', $termId);
+        }
+
+        $rows = $query
+            ->select('ec.course_code')
+            ->select('ec.course_description')
+            ->select('ec.instructor')
+            ->selectRaw("COALESCE(NULLIF(MAX(TRIM(ec.year_level)), ''), 'N/A') as year_level")
+            ->selectRaw("COALESCE(NULLIF(TRIM(ec.section_code), ''), 'N/A') as section_code")
+            ->selectRaw('COUNT(DISTINCT ses.student_id_number) as total_unique_students')
+            ->selectRaw('AVG(ses.total_score) as average_score')
+            ->groupBy('ec.course_code')
+            ->groupBy('ec.course_description')
+            ->groupBy('ec.instructor')
+            ->groupBy('ec.section_code')
+            ->get();
+
+        $studentsSum = 0;
+        $weightedSum = 0.0;
+
+        foreach ($rows as $row) {
+            $students = (int) ($row->total_unique_students ?? 0);
+            $average = $row->average_score !== null ? (float) $row->average_score : null;
+
+            if ($students > 0 && $average !== null) {
+                $studentsSum += $students;
+                $weightedSum += $students * $average;
+            }
+        }
+
+        $cache[$cacheKey] = $studentsSum > 0 ? round($weightedSum / $studentsSum, 2) : null;
+
+        return $cache[$cacheKey];
     }
 
     private function ratingsToPercent($ratings): float
