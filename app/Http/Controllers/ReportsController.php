@@ -18,48 +18,52 @@ class ReportsController extends Controller
     use FacultyData;
 
     public function index(Request $request)
-    {
-        $currentUser = $request->user();
-        $termParam = $request->query('term', null);
+{
+    $currentUser = $request->user();
+    $termParam = $request->query('term', null);
+    $facultySearch = $request->query('faculty_search', '');
+    $facultyPage = (int) $request->query('faculty_page', 1);
+    $perPage = (int) $request->query('faculty_per_page', 12);
+    $perPage = max(6, min($perPage, 48));
 
-        $activeTerm = DB::connection('lnu_poes')
+    $activeTerm = DB::connection('lnu_poes')
         ->table('school_years')
         ->where('is_active', 1)
         ->first();
 
-        $activeTermId = $activeTerm?->id;
+    $activeTermId = $activeTerm?->id;
 
-        $termId = (!$termParam || $termParam === 'current' || $termParam === 'all')
-            ? $activeTermId
-            : (is_numeric($termParam) ? (int) $termParam : $activeTermId);
+    $termId = (!$termParam || $termParam === 'current' || $termParam === 'all')
+        ? $activeTermId
+        : (is_numeric($termParam) ? (int) $termParam : $activeTermId);
 
-        $facultyEvaluations = $this->getLocalFacultyUsers($currentUser, $termId);
+    $facultyEvaluations = $this->getLocalFacultyUsers($currentUser, $termId, $facultySearch);
 
-        $allSubmissionsQuery = SupervisorEvaluationSubmission::query()
-            ->where('user_id', $currentUser->id);
+    $allSubmissionsQuery = SupervisorEvaluationSubmission::query()
+        ->where('user_id', $currentUser->id);
 
-        if ($termId) {
-            $allSubmissionsQuery->where('term', $termId);
-        }
+    if ($termId) {
+        $allSubmissionsQuery->where('term', $termId);
+    }
 
-        $submittedEvaluationsCount = (clone $allSubmissionsQuery)->count();
+    $submittedEvaluationsCount = (clone $allSubmissionsQuery)->count();
 
-        $evaluatedInstructors = (clone $allSubmissionsQuery)
-            ->select('instructor')
-            ->distinct()
-            ->pluck('instructor');
+    $evaluatedInstructors = (clone $allSubmissionsQuery)
+        ->select('instructor')
+        ->distinct()
+        ->pluck('instructor');
 
-        $averageRating = $this->getUserSefAverageRating(
-            (int) $currentUser->id,
-            $termId
-        );
+    $averageRating = $this->getUserSefAverageRating(
+        (int) $currentUser->id,
+        $termId
+    );
 
-        $passedGradesCount = UnitHeadGrade::query()
-            ->where('user_id', $currentUser->id)
-            ->whereNotNull('grade')
-            ->count();
+    $passedGradesCount = UnitHeadGrade::query()
+        ->where('user_id', $currentUser->id)
+        ->whereNotNull('grade')
+        ->count();
 
-        $recentReportsPage = SupervisorEvaluationSubmission::query()
+    $recentReportsPage = SupervisorEvaluationSubmission::query()
         ->where('user_id', $currentUser->id)
         ->when($termId, function ($q) use ($termId) {
             $q->where('term', $termId);
@@ -67,164 +71,182 @@ class ReportsController extends Controller
         ->latest('submitted_at')
         ->paginate(10);
 
-        $recentItems = collect($recentReportsPage->items());
-        $recentGradeKeys = $recentItems
-            ->map(fn ($s) => (string) ($s->instructor . '||' . $s->course_code))
-            ->unique()
-            ->values();
+    $recentItems = collect($recentReportsPage->items());
+    $recentGradeKeys = $recentItems
+        ->map(fn ($s) => (string) ($s->instructor . '||' . $s->course_code))
+        ->unique()
+        ->values();
 
-        $unitHeadGrades = collect();
-        if ($recentItems->isNotEmpty()) {
-            $unitHeadGrades = UnitHeadGrade::query()
-                ->where('user_id', $currentUser->id)
-                ->where(function ($q) use ($recentItems) {
-                    foreach ($recentItems as $item) {
-                        $q->orWhere(function ($nested) use ($item) {
-                            $nested->where('instructor', $item->instructor)
-                                ->where('course_code', $item->course_code);
-                        });
-                    }
-                })
-                ->orderByDesc('submitted_at')
-                ->get()
-                ->unique(fn ($g) => $g->instructor . '||' . $g->course_code)
-                ->keyBy(fn ($g) => (string) ($g->instructor . '||' . $g->course_code));
-        }
-
-        $recentReports = $recentItems
-            ->map(function ($submission) use ($unitHeadGrades, $recentGradeKeys) {
-                $ratings = $submission->ratings ?? [];
-                $totalScore = collect($ratings)->sum(fn ($score) => (int) $score);
-
-                // Use preloaded grades where possible
-                $gradeKey = (string) ($submission->instructor . '||' . $submission->course_code);
-                $latestGrade = $recentGradeKeys->contains($gradeKey)
-                    ? $unitHeadGrades->get($gradeKey)
-                    : null;
-
-
-                return [
-                    'instructor' => $submission->instructor,
-                    'course_code' => $submission->course_code,
-                    'course_title' => $submission->course_title,
-                    'rating_percentage' => round(($totalScore / 75) * 100, 2),
-                    'final_grade' => $latestGrade ? number_format((float) $latestGrade->grade, 1) : null,
-                    'submitted_at' => optional($submission->submitted_at)->format('M d, Y h:i A') ?? '-',
-                ];
-            })
-            ->values()
-            ->all();
-
-        $facultyUserIds = collect($facultyEvaluations)
-            ->pluck('user_id')
-            ->filter()
-            ->unique()
-            ->values()
-            ->all();
-
-        $sefAveragesByUser = $this->getFacultySefAverages($facultyUserIds, $termId);
-
-        $facultyList = collect($facultyEvaluations)
-            ->map(function ($faculty, $index) use ($evaluatedInstructors, $sefAveragesByUser, $termId) {
-                /*
-                |----------------------------------------
-                | OVERALL SET RATING FOR FACULTY CARD
-                | Calculates aggregate SET rating across all subjects
-                | Only calculate if faculty has assigned subjects
-                |----------------------------------------
-                */
-                $overallSetRating = null;
-                $overallSefRating = null;
-                $subjectsCount = (int) ($faculty['subjects_count'] ?? 0);
-
-                // Only calculate ratings if faculty has subjects
-                if ($subjectsCount > 0) {
-                    $overallSetRating = $this->getFacultyOverallSetRating($faculty['instructor'] ?? null, $termId);
-
-                    $averageSefRating = $sefAveragesByUser->get((int) ($faculty['user_id'] ?? 0));
-                    if ($averageSefRating !== null) {
-                        $overallSefRating = $averageSefRating;
-                    }
+    $unitHeadGrades = collect();
+    if ($recentItems->isNotEmpty()) {
+        $unitHeadGrades = UnitHeadGrade::query()
+            ->where('user_id', $currentUser->id)
+            ->where(function ($q) use ($recentItems) {
+                foreach ($recentItems as $item) {
+                    $q->orWhere(function ($nested) use ($item) {
+                        $nested->where('instructor', $item->instructor)
+                            ->where('course_code', $item->course_code);
+                    });
                 }
-
-                return [
-                    'initials' => $faculty['initials'],
-                    'instructor' => $faculty['instructor'],
-                    'subjects_count' => $subjectsCount,
-                    'evaluated' => $evaluatedInstructors->contains($faculty['instructor']),
-                    'employee_id_no' => $faculty['id_no'] ?? 'EMP-' . str_pad((string) ($index + 1), 3, '0', STR_PAD_LEFT),
-                    'detail_url' => route('reports.faculty', ['instructor' => $faculty['id_no']]),
-                    'overall_set_rating' => $overallSetRating,
-                    'overall_sef_rating' => $overallSefRating,
-                ];
             })
-            ->values()
-            ->all();
-
-        // Get school years for filters
-        $schoolYears = DB::connection('lnu_poes')
-            ->table('school_years')
-            ->select(
-                'id as value',
-                DB::raw("
-                    CONCAT(
-                        school_year_from,
-                        '-',
-                        school_year_to,
-                        ' - ',
-                        CASE
-                            WHEN semester = 1 THEN '1st Semester'
-                            WHEN semester = 2 THEN '2nd Semester'
-                            WHEN semester = 3 THEN 'Summer'
-                            ELSE CONCAT('Semester ', semester)
-                        END
-                    ) as label
-                ")
-            )
-            ->orderByDesc('school_year_to')
-            ->orderByDesc('school_year_from')
-            ->orderByDesc('semester')
+            ->orderByDesc('submitted_at')
             ->get()
-            ->toArray();
-
-        $reportsProps = $this->commonInertiaProps($currentUser, [
-            'reportSummary' => [
-                [
-                    'label' => 'Submitted Evaluations',
-                    'value' => $submittedEvaluationsCount,
-                    'helper' => 'Total evaluation forms submitted.',
-                ],
-                [
-                    'label' => 'Instructors Evaluated',
-                    'value' => $evaluatedInstructors->count(),
-                    'helper' => 'Unique faculty members evaluated.',
-                ],
-                [
-                    'label' => 'Average Rating',
-                    'value' => $averageRating . '%',
-                    'helper' => 'Average score across all evaluations.',
-                ],
-                [
-                    'label' => 'Posted Grades',
-                    'value' => $passedGradesCount,
-                    'helper' => 'Unit head grades recorded.',
-                ],
-            ],
-            'recentReports' => $recentReports,
-            'recentReportsPagination' => [
-                'current_page' => $recentReportsPage->currentPage(),
-                'last_page' => $recentReportsPage->lastPage(),
-                'per_page' => $recentReportsPage->perPage(),
-                'total' => $recentReportsPage->total(),
-            ],
-            'facultyList' => $facultyList,
-            'hasPendingEvaluations' => $evaluatedInstructors->count() < count($facultyEvaluations),
-            'schoolYears' => $schoolYears,
-            'selectedSchoolYear' => $termId,
-        ]);
-
-        return Inertia::render('ReportsPage', $reportsProps);
+            ->unique(fn ($g) => $g->instructor . '||' . $g->course_code)
+            ->keyBy(fn ($g) => (string) ($g->instructor . '||' . $g->course_code));
     }
+
+    $recentReports = $recentItems
+        ->map(function ($submission) use ($unitHeadGrades, $recentGradeKeys) {
+            $ratings = $submission->ratings ?? [];
+            $totalScore = collect($ratings)->sum(fn ($score) => (int) $score);
+
+            $gradeKey = (string) ($submission->instructor . '||' . $submission->course_code);
+            $latestGrade = $recentGradeKeys->contains($gradeKey)
+                ? $unitHeadGrades->get($gradeKey)
+                : null;
+
+            return [
+                'instructor' => $submission->instructor,
+                'course_code' => $submission->course_code,
+                'course_title' => $submission->course_title,
+                'rating_percentage' => round(($totalScore / 75) * 100, 2),
+                'final_grade' => $latestGrade ? number_format((float) $latestGrade->grade, 1) : null,
+                'submitted_at' => optional($submission->submitted_at)->format('M d, Y h:i A') ?? '-',
+            ];
+        })
+        ->values()
+        ->all();
+
+    $facultyUserIds = collect($facultyEvaluations)
+        ->pluck('user_id')
+        ->filter()
+        ->unique()
+        ->values()
+        ->all();
+
+    $sefAveragesByUser = $this->getFacultySefAverages($facultyUserIds, $termId);
+
+    // PAGINATE FACULTY LIST - FIXED PAGINATION
+    $facultyCollection = collect($facultyEvaluations);
+
+    $totalFaculty = $facultyCollection->count();
+    $lastPage = max(1, (int) ceil($totalFaculty / $perPage));
+
+    $facultyPage = max(1, min($facultyPage, $lastPage));
+
+    $offset = ($facultyPage - 1) * $perPage;
+
+    $paginatedFaculty = $facultyCollection
+        ->slice($offset, $perPage)
+        ->values();
+
+    $facultyList = $paginatedFaculty
+        ->map(function ($faculty, $index) use ($evaluatedInstructors, $sefAveragesByUser, $termId, $offset) {
+
+            $subjectsCount = (int) ($faculty['subjects_count'] ?? 0);
+
+            $overallSetRating = null;
+            $overallSefRating = null;
+
+            if ($subjectsCount > 0) {
+                $overallSetRating = $this->getFacultyOverallSetRating($faculty['instructor'] ?? null, $termId);
+
+                $averageSefRating = $sefAveragesByUser->get((int) ($faculty['user_id'] ?? 0));
+                if ($averageSefRating !== null) {
+                    $overallSefRating = $averageSefRating;
+                }
+            }
+
+            return [
+                'initials' => $faculty['initials'],
+                'instructor' => $faculty['instructor'],
+                'subjects_count' => $subjectsCount,
+                'evaluated' => $evaluatedInstructors->contains($faculty['instructor']),
+
+                'employee_id_no' =>
+                    $faculty['id_no']
+                    ?? 'EMP-' . str_pad((string) ($offset + $index + 1), 3, '0', STR_PAD_LEFT),
+
+                'detail_url' => route('reports.faculty', [
+                    'instructor' => $faculty['id_no']
+                ]),
+
+                'overall_set_rating' => $overallSetRating,
+                'overall_sef_rating' => $overallSefRating,
+            ];
+        })
+        ->values()
+        ->all();
+
+    $schoolYears = DB::connection('lnu_poes')
+        ->table('school_years')
+        ->select(
+            'id as value',
+            DB::raw("
+                CONCAT(
+                    school_year_from,
+                    '-',
+                    school_year_to,
+                    ' - ',
+                    CASE
+                        WHEN semester = 1 THEN '1st Semester'
+                        WHEN semester = 2 THEN '2nd Semester'
+                        WHEN semester = 3 THEN 'Summer'
+                        ELSE CONCAT('Semester ', semester)
+                    END
+                ) as label
+            ")
+        )
+        ->orderByDesc('school_year_to')
+        ->orderByDesc('school_year_from')
+        ->orderByDesc('semester')
+        ->get()
+        ->toArray();
+
+    $reportsProps = $this->commonInertiaProps($currentUser, [
+        'reportSummary' => [
+            [
+                'label' => 'Submitted Evaluations',
+                'value' => $submittedEvaluationsCount,
+                'helper' => 'Total evaluation forms submitted.',
+            ],
+            [
+                'label' => 'Instructors Evaluated',
+                'value' => $evaluatedInstructors->count(),
+                'helper' => 'Unique faculty members evaluated.',
+            ],
+            [
+                'label' => 'Average Rating',
+                'value' => $averageRating . '%',
+                'helper' => 'Average score across all evaluations.',
+            ],
+            [
+                'label' => 'Posted Grades',
+                'value' => $passedGradesCount,
+                'helper' => 'Unit head grades recorded.',
+            ],
+        ],
+        'recentReports' => $recentReports,
+        'recentReportsPagination' => [
+            'current_page' => $recentReportsPage->currentPage(),
+            'last_page' => $recentReportsPage->lastPage(),
+            'per_page' => $recentReportsPage->perPage(),
+            'total' => $recentReportsPage->total(),
+        ],
+        'facultyList' => [
+            'data' => $facultyList,
+            'current_page' => $facultyPage,
+            'last_page' => $lastPage,
+            'per_page' => $perPage,
+            'total' => $totalFaculty,
+        ],
+        'hasPendingEvaluations' => $evaluatedInstructors->count() < count($facultyEvaluations),
+        'schoolYears' => $schoolYears,
+        'selectedSchoolYear' => $termId,
+    ]);
+
+    return Inertia::render('ReportsPage', $reportsProps);
+}
 
     public function faculty(Request $request, string $instructor)
     {
@@ -484,7 +506,7 @@ class ReportsController extends Controller
      * - Unit heads see users in their unit
      * - Faculty/others see empty list
      */
-    private function getLocalFacultyUsers($user, ?int $selectedSchoolYearId = null): array
+    private function getLocalFacultyUsers($user, ?int $selectedSchoolYearId = null, string $search = ''): array
     {
         if (!$user) {
             return [];
@@ -552,6 +574,15 @@ class ReportsController extends Controller
         }
 
         $usersQuery->whereIn('id_no', $validIdNos);
+
+        // Add search filter
+        if (!empty($search)) {
+            $usersQuery->where(function($q) use ($search) {
+                $q->where('firstname', 'like', '%' . $search . '%')
+                ->orWhere('lastname', 'like', '%' . $search . '%')
+                ->orWhere('id_no', 'like', '%' . $search . '%');
+            });
+        }
 
         $users = $usersQuery->get();
 

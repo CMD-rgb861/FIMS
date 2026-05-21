@@ -193,6 +193,10 @@ export default function FacultyReportPage({
                     <div className="mt-3 flex flex-wrap items-center gap-3">
                         <a
                             href={`${reportsUrl}?tab=evaluation`}
+                            onClick={(e) => {
+                                e.preventDefault();
+                                router.visit(`${reportsUrl}?tab=evaluation`);
+                            }}
                             className="inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
                         >
                             Back
