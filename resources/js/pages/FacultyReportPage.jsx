@@ -67,6 +67,7 @@ export default function FacultyReportPage({
     user = null,
     hasPendingEvaluations = false,
     facultyName = '',
+    facultyIdNo = '',
     tableRows = [],
     schoolYears = [],
     selectedSchoolYear = '',
@@ -103,7 +104,13 @@ export default function FacultyReportPage({
         try {
             setIsModalLoading(true);
 
-            const response = await axios.get(row.breakdown_url, {
+            // Add the current term to the URL
+            const url = new URL(row.breakdown_url, window.location.origin);
+            if (selectedSchoolYear) {
+                url.searchParams.set('term', selectedSchoolYear);
+            }
+            
+            const response = await axios.get(url.toString(), {
                 headers: { Accept: 'application/json' },
             });
 
@@ -136,7 +143,7 @@ export default function FacultyReportPage({
         const newSchoolYear = event.target.value;
 
         router.get(route('reports.faculty', {
-            instructor: facultyName,
+            instructor: facultyIdNo,
             term: newSchoolYear,
             page: 1,
         }), {}, {
@@ -152,13 +159,10 @@ export default function FacultyReportPage({
 
     const handlePageChange = (newPage) => {
         router.get(route('reports.faculty', {
-            instructor: facultyName,
+            instructor: facultyIdNo,
             term: selectedSchoolYear,
             page: newPage,
-        }), {}, {
-            preserveState: true,
-            replace: true,
-        });
+        }));
     };
 
     return (

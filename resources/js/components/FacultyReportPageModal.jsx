@@ -1,4 +1,4 @@
-//INDIVIDUAL FACULTY REPORT BREAKDOWN MODAL COMPONENT
+import React from 'react';
 
 const extractYearLevelFromSectionCode = (sectionCode) => {
     const digits = String(sectionCode ?? '').match(/\d/g) ?? [];
@@ -71,6 +71,12 @@ export default function FacultyReportPageModal({
     if (!isOpen) {
         return null;
     }
+
+    // Placeholder function for view button (does nothing)
+    const handleViewClick = (item) => {
+        // Does nothing for now
+        console.log('View button clicked for item:', item);
+    };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4">
@@ -150,8 +156,14 @@ export default function FacultyReportPageModal({
                                 <th className="px-4 py-2.5 text-left font-semibold text-slate-600">
                                     (3 x 5) Weighted SET Score
                                 </th>
+                                
                                 <th className="px-4 py-2.5 text-left font-semibold text-slate-600">
                                     Total SET
+                                </th>
+
+                                {/* New Action Column */}
+                                <th className="px-4 py-2.5 text-left font-semibold text-slate-600">
+                                    Action
                                 </th>
                             </tr>
                         </thead>
@@ -183,6 +195,7 @@ export default function FacultyReportPageModal({
                                         <td className="px-4 py-2.5 text-slate-700">
                                             {item.weighted_set_score}
                                         </td>
+                                        
                                         <td className="px-4 py-2.5 text-slate-700">
                                             {item.total_set_value !== null && item.total_set_value !== undefined
                                                 ? Number(item.total_set_value).toFixed(2)
@@ -193,12 +206,23 @@ export default function FacultyReportPageModal({
                                                         : '-'
                                             }
                                         </td>
+
+                                        {/* View Button - Does nothing */}
+                                        <td className="px-4 py-2.5">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleViewClick(item)}
+                                                className="inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                                            >
+                                                View
+                                            </button>
+                                        </td>
                                     </tr>
                                 ))
                             ) : (
                                 <tr>
                                     <td
-                                        colSpan={7}
+                                        colSpan={8}
                                         className="px-4 py-6 text-center text-slate-500"
                                     >
                                         No SET breakdown data available.

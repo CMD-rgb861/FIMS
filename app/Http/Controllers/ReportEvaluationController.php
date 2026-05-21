@@ -13,14 +13,17 @@ class ReportEvaluationController extends Controller
     {
         $currentUser = $request->user();
         $instructorName = trim((string) (($currentUser->firstname ?? '') . ' ' . ($currentUser->lastname ?? '')));
+        $termId = $request->query('term');
+
 
         $query = $this->buildEvaluationQuery(
             $instructorName !== '' ? $instructorName : null,
-            $currentUser->id_no ?? null
+            $currentUser->id_no ?? null,
+            $termId
         );
 
         // Optional raw scores
-        $totalScores = (clone $query)->pluck('total_score');
+        $totalScores = (clone $query)->pluck('rating_percentage');
 
         // Overall unique evaluators (all subjects combined)
         $submittedStudentsCount = (clone $query)
@@ -36,8 +39,8 @@ class ReportEvaluationController extends Controller
             ->selectRaw("COALESCE(NULLIF(TRIM(ec.section_code), ''), 'N/A') as section_code")
             ->selectRaw('COUNT(DISTINCT ses.student_id_number) as total_evaluators')
             ->selectRaw('COUNT(ses.id) as total_submissions')
-            ->selectRaw('AVG(ses.total_score) as average_score')
-            ->selectRaw('ROUND(SUM(ses.total_score), 2) as total_score_sum')
+            ->selectRaw('AVG(ses.rating_percentage) as average_score')
+            ->selectRaw('ROUND(SUM(ses.rating_percentage), 2) as total_score_sum')
             ->selectRaw('MIN(ses.submitted_at) as first_submission')
             ->selectRaw('MAX(ses.submitted_at) as last_submission')
             ->groupBy('ec.course_code')
@@ -65,8 +68,9 @@ class ReportEvaluationController extends Controller
         $subjectId = $request->query('subject_id');
         $courseCode = $request->query('course_code');
         $yearSection = $request->query('year_section');
+        $termId = $request->query('term');  
 
-        $query = $this->buildEvaluationQuery($instructor, $instructorId, $courseCode);
+        $query = $this->buildEvaluationQuery($instructor, $instructorId, $courseCode, $yearSection, $termId);
 
         $rows = (clone $query)
             ->select('ec.course_code')
@@ -76,8 +80,8 @@ class ReportEvaluationController extends Controller
             ->selectRaw("COALESCE(NULLIF(TRIM(ec.section_code), ''), 'N/A') as section_code")
             ->selectRaw('COUNT(DISTINCT ses.student_id_number) as total_unique_students')
             ->selectRaw('COUNT(ses.id) as total_submissions')
-            ->selectRaw('AVG(ses.total_score) as average_score')
-            ->selectRaw('ROUND(SUM(ses.total_score), 2) as total_score_sum')
+            ->selectRaw('AVG(ses.rating_percentage) as average_score')
+            ->selectRaw('ROUND(SUM(ses.rating_percentage), 2) as total_score_sum')
             ->selectRaw('MIN(ses.submitted_at) as first_submission')
             ->selectRaw('MAX(ses.submitted_at) as last_submission')
             ->groupBy('ec.course_code')
@@ -163,52 +167,54 @@ class ReportEvaluationController extends Controller
         ]);
     }
 
-    private function buildEvaluationQuery(?string $instructor = null, ?string $instructorId = null, ?string $courseCode = null, ?string $yearSection = null)
-    {
-        $query = DB::connection('lnu_poes')
-            ->table('enrollment_courses as ec')
-            ->join('student_evaluation_submissions as ses', 'ec.id', '=', 'ses.subject_id');
+    private function buildEvaluationQuery(?string $instructor = null, ?string $instructorId = null, ?string $courseCode = null, ?string $yearSection = null, ?string $termId = null)
+        {
+            $query = DB::connection('lnu_poes')
+                ->table('enrollment_courses as ec')
+                ->join('student_evaluation_submissions as ses', 'ec.id', '=', 'ses.subject_id');
 
-        $tokens = $this->extractInstructorTokens($instructor);
+            // Add term filter
+            if ($termId !== null && $termId !== '' && $termId !== 'all') {
+                $query->where('ec.school_year_id', $termId);
+                $query->where('ses.term_id', $termId);
+            }
 
-        // Match either by instructor name tokens (AND across tokens) OR by exact instructor_id
-        $query->where(function ($nested) use ($tokens, $instructorId) {
-            $hasTokens = ! empty($tokens);
+            // Apply course code filter
+            if (!empty($courseCode)) {
+                $query->where('ec.course_code', $courseCode);
+            }
 
-            if ($hasTokens) {
-                foreach ($tokens as $token) {
-                    $nested->where('ec.instructor', 'like', '%' . $token . '%');
+            // Apply section filtering - ONLY filter by section_code, NOT by year_level
+            if (!empty($yearSection)) {
+                $sectionCode = $this->extractSectionCode($yearSection);
+                
+                // Only apply section code filter if we have a section code
+                if ($sectionCode !== null) {
+                    $query->whereRaw("TRIM(ec.section_code) = ?", [$sectionCode]);
+                }
+                
+                // DO NOT filter by year_level since it's often null in the database
+                // The year level is usually embedded in the section_code (e.g., "AM11" contains "1" for 1st year)
+            }
+
+            // Match by instructor_id OR subject_id (to handle null instructor_id cases)
+            if (!empty($instructorId)) {
+                $query->where(function ($q) use ($instructorId) {
+                    $q->where('ses.instructor_id', $instructorId)
+                    ->orWhereColumn('ses.subject_id', 'ec.id');
+                });
+            } else {
+                // Fall back to instructor name matching
+                $tokens = $this->extractInstructorTokens($instructor);
+                if (!empty($tokens)) {
+                    foreach ($tokens as $token) {
+                        $query->where('ec.instructor', 'like', '%' . $token . '%');
+                    }
                 }
             }
 
-            if (! empty($instructorId)) {
-                if ($hasTokens) {
-                    $nested->orWhere('ses.instructor_id', $instructorId);
-                } else {
-                    $nested->where('ses.instructor_id', $instructorId);
-                }
-            }
-        });
-
-        if (! empty($courseCode)) {
-            $query->where('ec.course_code', $courseCode);
+            return $query;
         }
-
-        if (! empty($yearSection) && empty($courseCode)) {
-            $yearLevel = $this->extractYearLevel($yearSection);
-            $sectionCode = $this->extractSectionCode($yearSection);
-
-            if ($yearLevel !== null) {
-                $query->whereRaw("COALESCE(NULLIF(TRIM(ec.year_level), ''), '') = ?", [$yearLevel]);
-            }
-
-            if ($sectionCode !== null) {
-                $query->whereRaw("COALESCE(NULLIF(TRIM(ec.section_code), ''), '') LIKE ?", ['%' . $sectionCode . '%']);
-            }
-        }
-
-        return $query;
-    }
 
     private function extractInstructorTokens(?string $instructor): array
     {

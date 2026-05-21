@@ -9,6 +9,7 @@ use App\Models\UnitHeadGrade;
 use App\Models\User;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Http\Request;
 
@@ -152,7 +153,7 @@ class ReportsController extends Controller
                     'subjects_count' => $subjectsCount,
                     'evaluated' => $evaluatedInstructors->contains($faculty['instructor']),
                     'employee_id_no' => $faculty['id_no'] ?? 'EMP-' . str_pad((string) ($index + 1), 3, '0', STR_PAD_LEFT),
-                    'detail_url' => route('reports.faculty', ['instructor' => $faculty['instructor']]),
+                    'detail_url' => route('reports.faculty', ['instructor' => $faculty['id_no']]),
                     'overall_set_rating' => $overallSetRating,
                     'overall_sef_rating' => $overallSefRating,
                 ];
@@ -229,14 +230,14 @@ class ReportsController extends Controller
     {
         $currentUser = $request->user();
         $termParam = $request->query('term', null);
-
+        
         $activeTerm = DB::connection('lnu_poes')
             ->table('school_years')
             ->where('is_active', 1)
             ->first();
 
         $activeTermId = $activeTerm?->id;
-
+        
         $selectedSchoolYear = (!$termParam || $termParam === 'current' || $termParam === 'all')
             ? $activeTermId
             : (is_numeric($termParam) ? (int) $termParam : $activeTermId);
@@ -245,7 +246,7 @@ class ReportsController extends Controller
 
         $facultyCollection = collect($facultyEvaluations);
         $facultyIndex = $facultyCollection->search(function ($faculty) use ($instructor) {
-            return strcasecmp($faculty['instructor'], $instructor) === 0;
+            return strcasecmp($faculty['id_no'], $instructor) === 0;
         });
 
         abort_if($facultyIndex === false, 404);
@@ -283,13 +284,16 @@ class ReportsController extends Controller
             $subjectsQuery->where('school_year_id', $selectedSchoolYear);
         }
 
+        $sectionExpr = DB::raw('COALESCE(ec.section_code, "NO_SECTION")');
+
         $subjectsPage = $subjectsQuery
             ->selectRaw('MIN(ec.id) as id')
-            ->select('ec.course_code', 'ec.course_description', 'ec.school_year_id')
+            ->select('ec.course_code', 'ec.school_year_id')
+            ->selectRaw('MAX(ec.course_description) as course_description')
             ->selectRaw("MAX(NULLIF(TRIM(ec.year_level), '')) as year_level")
-            ->selectRaw("COALESCE(NULLIF(TRIM(ec.section_code), ''), '') as section_code")
-            ->groupBy('ec.course_code', 'ec.course_description', 'ec.school_year_id')
-            ->groupByRaw("COALESCE(NULLIF(TRIM(ec.section_code), ''), '')")
+            ->selectRaw('COALESCE(ec.section_code, "NO_SECTION") as section_code')
+            ->where('ec.id_no', $instructor)
+            ->groupBy('ec.course_code', $sectionExpr, 'ec.school_year_id')
             ->orderBy('ec.course_code')
             ->paginate($perPage)
             ->appends($request->query());
@@ -345,7 +349,7 @@ class ReportsController extends Controller
 
         $tableRows = $subjectRows
             ->values()
-            ->map(function ($subject, $index) use ($employeeIdNo, $facultyMeta, $latestSubmissionByCourse, $latestGradesByCourse, $subjectsPage, $instructorId) {
+            ->map(function ($subject, $index) use ($employeeIdNo, $facultyMeta, $latestSubmissionByCourse, $latestGradesByCourse, $subjectsPage, $instructorId, $selectedSchoolYear) {
                 $courseCode = (string) ($subject->course_code ?? '');
                 $subjectId = $subject->id ?? null;
 
@@ -396,6 +400,7 @@ class ReportsController extends Controller
                         'subject_id' => $subjectId,
                         'course_code' => $courseCode,
                         'year_section' => $term,
+                        'term' => $selectedSchoolYear,
                     ]),
                     'set_breakdown' => [
                         [
@@ -420,6 +425,7 @@ class ReportsController extends Controller
             ->pluck('grade')
             ->filter(fn ($grade) => $grade !== null)
             ->avg();
+            
         $overallSetRating = $overallSetRatingValue !== null ? round((float) $overallSetRatingValue, 2) : null;
         
 
@@ -451,6 +457,7 @@ class ReportsController extends Controller
 
 
         $facultyReportProps = $this->commonInertiaProps($currentUser, [
+            'facultyIdNo' => $facultyMeta['id_no'], 
             'facultyName' => $facultyMeta['instructor'],
             'schoolYears' => $schoolYears,
             'selectedSchoolYear' => $selectedSchoolYear,
@@ -483,36 +490,89 @@ class ReportsController extends Controller
             return [];
         }
 
-        $usersQuery = User::query()->select('id', 'id_no', 'firstname', 'lastname', 'college_id', 'unit_id');
+        $usersQuery = User::query()
+            ->select(
+                'id',
+                'id_no',
+                'firstname',
+                'lastname',
+                'college_id',
+                'unit_id'
+            );
 
-        // Filter based on user role
-        // Admins see all users; Deans see users by their college; Unit heads see users by their unit
+        // Role filtering
         if ($user->isAdmin()) {
-            // Admin sees all users, no filtering needed
+
+            // No filter
+
         } elseif ($user->isDean()) {
-            // prefer the college_id stored on the dean record (deans table)
+
             $collegeId = $user->dean?->college_id ?? $user->college_id;
 
-            // if we still don't have a college id, return empty — nothing to filter
             if ($collegeId === null) {
                 return [];
             }
 
             $usersQuery->where('college_id', $collegeId);
+
         } elseif ($user->isUnitHead()) {
+
             $usersQuery->where('unit_id', $user->unit_id);
+
         } else {
-            // Faculty users don't see other faculty in this context
+
             return [];
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | Get valid instructor id_no from external DB
+        |--------------------------------------------------------------------------
+        */
+
+        $validIdNosQuery = DB::connection('lnu_poes')
+            ->table('enrollment_courses')
+            ->select('id_no')
+            ->distinct();
+
+        if ($selectedSchoolYearId !== null) {
+            $validIdNosQuery->where('school_year_id', $selectedSchoolYearId);
+        }
+
+        $validIdNos = $validIdNosQuery
+            ->pluck('id_no')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        // Exclude users without enrollment_courses records
+        if (empty($validIdNos)) {
+            return [];
+        }
+
+        $usersQuery->whereIn('id_no', $validIdNos);
+
         $users = $usersQuery->get();
 
-        // Batch fetch subject counts from external DB (avoid loading full subject rows here)
-        $idNos = $users->pluck('id_no')->filter()->unique()->values()->all();
+        /*
+        |--------------------------------------------------------------------------
+        | Subject counts
+        |--------------------------------------------------------------------------
+        */
+
+        $idNos = $users->pluck('id_no')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
         $subjectCountsByIdNo = collect();
+
         if (!empty($idNos)) {
+
             try {
+
                 $subjectCountsQuery = DB::connection('lnu_poes')
                     ->table('enrollment_courses')
                     ->whereIn('id_no', $idNos);
@@ -522,29 +582,57 @@ class ReportsController extends Controller
                 }
 
                 $subjectCountsByIdNo = $subjectCountsQuery
-                    ->select(
-                        'id_no',
-                        DB::raw('COUNT(DISTINCT course_code, course_description, year_level, section_code, school_year_id) as subjects_count')
-                    )
-                    ->groupBy('id_no')
-                    ->pluck('subjects_count', 'id_no');
+                ->select(
+                    'id_no',
+                    DB::raw("
+                        COUNT(
+                            DISTINCT CONCAT(
+                                course_code,
+                                '|',
+                                COALESCE(section_code, 'NO_SECTION'),
+                                '|',
+                                school_year_id
+                            )
+                        ) as subjects_count
+                    ")
+                )
+                ->groupBy('id_no')
+                ->pluck('subjects_count', 'id_no');
+
             } catch (\Exception $e) {
+
                 $subjectCountsByIdNo = collect();
             }
         }
 
-        // Transform to expected faculty structure
+        /*
+        |--------------------------------------------------------------------------
+        | Transform response
+        |--------------------------------------------------------------------------
+        */
+
         return $users->map(function ($localUser) use ($subjectCountsByIdNo) {
+
             $firstName = trim((string) ($localUser->firstname ?? ''));
             $lastName = trim((string) ($localUser->lastname ?? ''));
-            $fullName = trim($firstName . ' ' . $lastName) ?: $localUser->id_no ?? 'Unknown';
 
-            // Generate initials
+            $fullName = trim($firstName . ' ' . $lastName);
+
+            if (empty($fullName)) {
+                $fullName = $localUser->id_no ?? 'Unknown';
+            }
+
             $initials = '';
+
             foreach (explode(' ', $fullName) as $word) {
+
                 if ($word !== '') {
+
                     $initials .= strtoupper(mb_substr($word, 0, 1));
-                    if (mb_strlen($initials) >= 3) break;
+
+                    if (mb_strlen($initials) >= 3) {
+                        break;
+                    }
                 }
             }
 
@@ -560,6 +648,7 @@ class ReportsController extends Controller
                 'user_id' => $localUser->id,
                 'id_no' => $localUser->id_no,
             ];
+
         })->values()->all();
     }
 
@@ -577,71 +666,73 @@ class ReportsController extends Controller
     }
 
     private function getFacultyOverallSetRating(?string $instructor, ?int $termId = null): ?float
-    {
-        if ($instructor === null || trim($instructor) === '') {
-            return null;
-        }
-
-        static $cache = [];
-
-        $cacheKey = mb_strtoupper(trim($instructor)) . '|' . ($termId ?? 'all');
-        if (array_key_exists($cacheKey, $cache)) {
-            return $cache[$cacheKey];
-        }
-
-        $tokens = preg_split('/[^\pL\pN]+/u', mb_strtoupper(trim($instructor))) ?: [];
-        $tokens = array_values(array_filter($tokens, function ($token) {
-            return mb_strlen($token) > 1;
-        }));
-
-        $query = DB::connection('lnu_poes')
-            ->table('enrollment_courses as ec')
-            ->join('student_evaluation_submissions as ses', 'ec.id', '=', 'ses.subject_id');
-
-        if (! empty($tokens)) {
-            $query->where(function ($nested) use ($tokens) {
-                foreach ($tokens as $token) {
-                    $nested->where('ec.instructor', 'like', '%' . $token . '%');
-                }
-            });
-        }
-
-        if ($termId !== null) {
-            $query->where('ec.school_year_id', $termId);
-        }
-
-        $rows = $query
-            ->select('ec.course_code')
-            ->select('ec.course_description')
-            ->select('ec.instructor')
-            ->selectRaw("COALESCE(NULLIF(MAX(TRIM(ec.year_level)), ''), 'N/A') as year_level")
-            ->selectRaw("COALESCE(NULLIF(TRIM(ec.section_code), ''), 'N/A') as section_code")
-            ->selectRaw('COUNT(DISTINCT ses.student_id_number) as total_unique_students')
-            ->selectRaw('AVG(ses.total_score) as average_score')
-            ->groupBy('ec.course_code')
-            ->groupBy('ec.course_description')
-            ->groupBy('ec.instructor')
-            ->groupBy('ec.section_code')
-            ->get();
-
-        $studentsSum = 0;
-        $weightedSum = 0.0;
-
-        foreach ($rows as $row) {
-            $students = (int) ($row->total_unique_students ?? 0);
-            $average = $row->average_score !== null ? (float) $row->average_score : null;
-
-            if ($students > 0 && $average !== null) {
-                $studentsSum += $students;
-                $weightedSum += $students * $average;
+        {
+            if ($instructor === null || trim($instructor) === '') {
+                return null;
             }
+
+            static $cache = [];
+            $cacheKey = mb_strtoupper(trim($instructor)) . '|' . ($termId ?? 'all');
+
+            if (array_key_exists($cacheKey, $cache)) {
+                return $cache[$cacheKey];
+            }
+
+            // Tokenize instructor name
+            $tokens = preg_split('/[^\pL\pN]+/u', mb_strtoupper(trim($instructor))) ?: [];
+            $tokens = array_values(array_filter($tokens, fn($token) => mb_strlen($token) > 1));
+
+            // Get all subjects and their submissions for this instructor
+            $query = DB::connection('lnu_poes')
+                ->table('enrollment_courses as ec')
+                ->join('student_evaluation_submissions as ses', 'ec.id', '=', 'ses.subject_id')
+                ->select('ec.course_code', 'ec.section_code')
+                ->selectRaw('COUNT(DISTINCT ses.student_id_number) as student_count')
+                ->selectRaw('AVG(ses.rating_percentage) as avg_rating')
+                ->whereNotNull('ses.rating_percentage')
+                ->groupBy('ec.course_code', 'ec.section_code');
+
+            // Apply instructor filter
+            if (!empty($tokens)) {
+                foreach ($tokens as $token) {
+                    $query->where('ec.instructor', 'like', '%' . $token . '%');
+                }
+            }
+
+            // Apply term filter
+            if ($termId !== null && $termId !== '' && $termId !== 'all') {
+                $query->where('ec.school_year_id', $termId);
+                $query->where('ses.term_id', $termId);
+            }
+
+            $subjects = $query->get();
+
+            if ($subjects->isEmpty()) {
+                return null;
+            }
+
+            // Calculate weighted average
+            $totalWeightedScore = 0;
+            $totalStudents = 0;
+
+            foreach ($subjects as $subject) {
+                $studentCount = (int) $subject->student_count;
+                $avgRating = (float) $subject->avg_rating;
+                
+                $totalWeightedScore += $studentCount * $avgRating;
+                $totalStudents += $studentCount;
+            }
+
+            if ($totalStudents === 0) {
+                return null;
+            }
+
+            $overallRating = round($totalWeightedScore / $totalStudents, 2);
+            $cache[$cacheKey] = $overallRating;
+
+            return $overallRating;
         }
-
-        $cache[$cacheKey] = $studentsSum > 0 ? round($weightedSum / $studentsSum, 2) : null;
-
-        return $cache[$cacheKey];
-    }
-
+    
     private function ratingsToPercent($ratings): float
     {
         $totalScore = collect($ratings ?? [])->sum(fn ($score) => (int) $score);
