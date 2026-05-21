@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import AppLayout from '../Layouts/AppLayout';
-import FacultyGradeModal from '../components/FacultyGradeModal';
+import FacultyGradeModal from '../modals/FacultyGradeModal';
 
 export default function GradesPage({
     appName = 'FIMS',

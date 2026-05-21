@@ -11,6 +11,8 @@ use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\SubjectsController;
 use App\Http\Controllers\UnitHeadGradeController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\SubmissionController;
+use App\Http\Controllers\AnswerController; 
 
 Route::get('/', function () {
     return redirect()->route('login');
@@ -26,6 +28,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/reports', [ReportsController::class, 'index'])->name('reports');
     Route::get('/reports/faculty/{instructor}', [ReportsController::class, 'faculty'])->name('reports.faculty');
     Route::get('/reports/faculty/{instructor}/breakdown', [ReportEvaluationController::class, 'breakdown'])->name('reports.faculty.breakdown');
+    
+    Route::get('/submissions', [SubmissionController::class, 'getSubmissions']);
+    Route::get('/answers/{submissionId}', [AnswerController::class, 'getAnswers']);
+    Route::put('/answers/{submissionId}', [AnswerController::class, 'updateAnswers']);
+
     Route::get('/my-profile', [AppProfileController::class, 'edit'])->name('my-profile.edit');
     Route::put('/my-profile', [AppProfileController::class, 'update'])->name('my-profile.update');
     Route::get('/account-settings', [AppProfileController::class, 'accountSettingsEdit'])->name('account-settings.edit');

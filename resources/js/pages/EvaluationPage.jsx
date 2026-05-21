@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import AppLayout from '../Layouts/AppLayout';
-import SefEvaluationModal from '../components/SefEvaluationModal';
-import EvaluationResultModal from '../components/EvaluationResultModal';
+import SefEvaluationModal from '../modals/SefEvaluationModal';
+import EvaluationResultModal from '../modals/EvaluationResultModal';
 import { isAdminRole } from '../utils/role';
 
 export default function EvaluationPage({
@@ -39,6 +39,7 @@ export default function EvaluationPage({
             evaluated: item.evaluated || evaluatedInstructors.includes(item.instructor),
         }))
     ));
+    
     const openEvaluationModal = (item) => {
         if (item.evaluated || isEvaluationClosed) {
             return;
@@ -267,6 +268,6 @@ export default function EvaluationPage({
                     onClose={closeResultModal}
                 />
             </main>
-            </AppLayout>
+        </AppLayout>
     );
 }

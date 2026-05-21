@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import AppLayout from '../Layouts/AppLayout';
 import { router } from '@inertiajs/react';
-import FacultyReportPageModal from '../components/FacultyReportPageModal';
+import FacultyReportPageModal from '../modals/FacultyReportPageModal';
 
 const extractYearLevelFromSectionCode = (sectionCode) => {
     const digits = String(sectionCode ?? '').match(/\d/g) ?? [];
@@ -78,6 +78,7 @@ export default function FacultyReportPage({
     const [selectedSefBreakdown, setSelectedSefBreakdown] = useState(null);
     const [isModalLoading, setIsModalLoading] = useState(false);
     const [modalError, setModalError] = useState('');
+    const [selectedInstructorId, setSelectedInstructorId] = useState(null);
 
     /**
      * CRITICAL DEBUG POINT: Track current school year filter state
@@ -97,6 +98,10 @@ export default function FacultyReportPage({
             total_score: row?.sef_total_score ?? null,
             rating: row?.sef_rating ?? null,
         });
+
+        // Store instructor ID for modal 2
+        setSelectedInstructorId(row?.instructor_id);
+
         setIsSetModalOpen(true);
 
         if (!row?.breakdown_url) return;
@@ -132,6 +137,7 @@ export default function FacultyReportPage({
         setSelectedSefBreakdown(null);
         setIsModalLoading(false);
         setModalError('');
+        setSelectedInstructorId(null);
     };
 
     /**
@@ -343,6 +349,8 @@ export default function FacultyReportPage({
                     selectedSefBreakdown={selectedSefBreakdown}
                     isLoading={isModalLoading}
                     errorMessage={modalError}
+                    instructorId={facultyIdNo}
+                    termId={selectedSchoolYear}
                 />
             </main>
         </AppLayout>
