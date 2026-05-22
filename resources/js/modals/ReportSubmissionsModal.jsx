@@ -114,6 +114,7 @@ export default function ReportSubmissionsModal({
             <Modal
                 show={isOpen}
                 onClose={onClose}
+                closeable={false}
                 maxWidth="2xl"
             >
                 <div
