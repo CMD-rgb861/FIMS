@@ -170,7 +170,7 @@ export default function ReportSubmissionsModal({
                                             <thead>
                                                 <tr>
                                                     <th className="w-28 px-4 py-3 text-left font-medium text-gray-600">
-                                                        #
+                                                        Sequence No.
                                                     </th>
 
                                                     <th className="px-4 py-3 text-left font-medium text-gray-600">
