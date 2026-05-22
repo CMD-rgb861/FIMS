@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { toast, ToastContainer } from 'react-toastify';
 import PrimaryButton from '@/Components/PrimaryButton';
 import SecondaryButton from '@/Components/SecondaryButton';
 import InputLabel from '@/Components/InputLabel';
@@ -43,7 +44,7 @@ const ALL_QUESTIONS = [];
 SECTIONS.forEach((section, sectionIndex) => {
     section.items.forEach((item, itemIndex) => {
         ALL_QUESTIONS.push({
-            id: item.id, // Use the actual question key from database (s0_i0, s0_i1, etc.)
+            id: item.id,
             text: item.text,
             section: section.title,
             sectionIndex: sectionIndex,
@@ -57,7 +58,7 @@ export default function StudentAnswersDrawer({
     onClose,
     student,
     courseCode,
-    courseDescription, // ADD THIS - receive course description from parent
+    courseDescription,
     termId,
 }) {
     const [answers, setAnswers] = useState({});
@@ -76,10 +77,11 @@ export default function StudentAnswersDrawer({
         setIsLoading(true);
         try {
             const response = await axios.get(`/answers/${student.submission_id}`, {
-                params: { term_id: termId }
+                params: { 
+                    term_id: termId ? Number(termId) : undefined
+                }
             });
             
-            // Convert answers array to object keyed by question_id
             const answersMap = {};
             if (response.data.answers && Array.isArray(response.data.answers)) {
                 response.data.answers.forEach(answer => {
@@ -89,6 +91,7 @@ export default function StudentAnswersDrawer({
             setAnswers(answersMap);
         } catch (err) {
             console.error('Failed to fetch answers:', err);
+            toast.error('Failed to load answers. Please try again.');
         } finally {
             setIsLoading(false);
         }
@@ -109,16 +112,22 @@ export default function StudentAnswersDrawer({
     const handleSave = async () => {
         setIsSaving(true);
         try {
-            await axios.put(`/answers/${student.submission_id}`, {
+            const response = await axios.put(`/answers/${student.submission_id}`, {
                 answers: editedAnswers,
-                term_id: termId
+                term_id: termId ? Number(termId) : null
             });
             
-            setAnswers({ ...editedAnswers });
-            setIsEditMode(false);
+            if (response.data.success) {
+                setAnswers({ ...editedAnswers });
+                setIsEditMode(false);
+                toast.success(response.data.message || 'Answers saved successfully!');
+            } else {
+                toast.error(response.data.message || 'Failed to save answers');
+            }
         } catch (err) {
             console.error('Failed to save answers:', err);
-            alert('Failed to save changes. Please try again.');
+            const errorMessage = err.response?.data?.message || 'Failed to save changes. Please try again.';
+            toast.error(errorMessage);
         } finally {
             setIsSaving(false);
         }
@@ -209,7 +218,6 @@ export default function StudentAnswersDrawer({
 
                     {!isLoading && ALL_QUESTIONS.length > 0 && (
                         <div className="space-y-8">
-                            {/* Group questions by section */}
                             {SECTIONS.map((section, sectionIdx) => {
                                 const sectionQuestions = ALL_QUESTIONS.filter(
                                     q => q.section === section.title
@@ -287,6 +295,21 @@ export default function StudentAnswersDrawer({
                     </div>
                 )}
             </div>
+            
+            {/* ToastContainer specific to this drawer - positioned top-left */}
+            <ToastContainer
+                position="top-left"
+                autoClose={3000}
+                hideProgressBar={false}
+                newestOnTop={false}
+                closeOnClick
+                rtl={false}
+                pauseOnFocusLoss
+                draggable
+                pauseOnHover
+                theme="light"
+                style={{ zIndex: 9999 }}
+            />
         </>
     );
 }

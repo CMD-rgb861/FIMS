@@ -20,6 +20,12 @@ class AnswerController extends Controller
     public function getAnswers(Request $request, $submissionId)
     {
         try {
+            // Convert term_id to integer if provided
+            $termId = $request->get('term_id');
+            if ($termId !== null) {
+                $termId = (int) $termId;
+            }
+            
             // Use a single query with join instead of two separate queries
             $result = DB::connection('lnu_poes')
                 ->table('student_evaluation_submissions as s')
@@ -42,7 +48,6 @@ class AnswerController extends Controller
                     'a.updated_at as answer_updated_at'
                 ])
                 ->get();
-            
             if ($result->isEmpty()) {
                 return response()->json([
                     'success' => false,
@@ -106,12 +111,15 @@ class AnswerController extends Controller
     /**
      * Update answers for a submission
      */
+    /**
+ * Update answers for a submission
+ */
     public function updateAnswers(Request $request, $submissionId)
     {
         $validated = $request->validate([
             'answers' => 'required|array',
             'answers.*' => 'nullable|integer|min:1|max:5',
-            'term_id' => 'nullable|string',
+            'term_id' => 'nullable|integer',
         ]);
         
         // Filter out null/empty answers early
@@ -129,24 +137,25 @@ class AnswerController extends Controller
         DB::connection('lnu_poes')->beginTransaction();
         
         try {
-            // Use updateOrCreate for each answer in a single transaction
             $updatedCount = 0;
+            $now = now();
             
             foreach ($answersToUpdate as $questionKey => $score) {
-                $updated = PoesEvalAnswers::updateOrCreate(
-                    [
-                        'submission_id' => $submissionId,
-                        'question_key' => $questionKey
-                    ],
-                    [
-                        'score' => (int) $score,
-                        'updated_at' => now(),
-                    ]
-                );
-                
-                if ($updated->wasRecentlyCreated || $updated->wasChanged()) {
-                    $updatedCount++;
-                }
+                // Use updateOrInsert which is the Query Builder equivalent of updateOrCreate
+                DB::connection('lnu_poes')
+                    ->table('student_evaluation_submission_answers')
+                    ->updateOrInsert(
+                        [
+                            'submission_id' => $submissionId,
+                            'question_key' => $questionKey
+                        ],
+                        [
+                            'score' => (int) $score,
+                            'updated_at' => $now,
+                            'created_at' => DB::raw("COALESCE(created_at, '$now')")
+                        ]
+                    );
+                $updatedCount++;
             }
             
             // Recalculate rating (optimized)
