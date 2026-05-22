@@ -57,6 +57,7 @@ export default function StudentAnswersDrawer({
     onClose,
     student,
     courseCode,
+    courseDescription, // ADD THIS - receive course description from parent
     termId,
 }) {
     const [answers, setAnswers] = useState({});
@@ -176,7 +177,7 @@ export default function StudentAnswersDrawer({
                                 {isEditMode ? 'Edit Answers' : 'Student Answers'}
                             </h3>
                             <p className="mt-1 text-sm text-gray-500">
-                                {student?.student_name} • {student?.student_id_number} • {courseCode}
+                                {courseCode} {courseDescription ? `• ${courseDescription}` : ''}
                             </p>
                         </div>
                         <div className="flex items-center gap-3">

@@ -8,6 +8,7 @@ export default function ReportSubmissionsModal({
     isOpen,
     onClose,
     courseCode,
+    courseDesc,
     yearSection,
     instructorId,
     termId,
@@ -19,6 +20,7 @@ export default function ReportSubmissionsModal({
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [isInitialLoading, setIsInitialLoading] = useState(false);
     const [isPageLoading, setIsPageLoading] = useState(false);
+    const [apiCourseDescription, setApiCourseDescription] = useState(null);
 
     // PAGINATION
     const [currentPage, setCurrentPage] = useState(1);
@@ -63,6 +65,7 @@ export default function ReportSubmissionsModal({
             const response = await axios.get('/submissions', {
                 params: {
                     course_code: courseCode,
+                    course_description: courseDesc || courseCode,
                     year_section: yearSection,
                     instructor_id: instructorId,
                     term_id: termId,
@@ -74,6 +77,9 @@ export default function ReportSubmissionsModal({
             if (response.data?.students !== undefined) {
                 setStudents(response.data.students || []);
                 setPagination(response.data.pagination || pagination);
+                if (response.data.course_description) {
+                    setApiCourseDescription(response.data.course_description);
+                }
             } else {
                 setError('Unexpected response format from server');
             }
@@ -133,7 +139,7 @@ export default function ReportSubmissionsModal({
                         </h2>
 
                         <p className="mt-1 text-sm text-gray-500">
-                            {courseCode} • {yearSection}
+                            {courseCode} • {apiCourseDescription || courseDesc || 'N/A'} • {yearSection}
                         </p>
                     </div>
 
@@ -165,23 +171,23 @@ export default function ReportSubmissionsModal({
                         {!isInitialLoading && !error && students.length > 0 && (
                                 <>
                                     {/* FIXED TABLE HEADER */}
-                                    <div className="flex-shrink-0 border-b border-gray-200 bg-gray-50">
-                                        <table className="w-full table-fixed text-sm">
+                                    <div className="flex-shrink-0 border-b border-gray-200 bg-gray-50 overflow-hidden">
+                                        <table className="w-full text-sm border-collapse">
                                             <thead>
                                                 <tr>
-                                                    <th className="w-28 px-4 py-3 text-left font-medium text-gray-600">
+                                                    <th className="px-4 py-3 text-center font-medium text-gray-600 w-1/5">
                                                         Sequence No.
                                                     </th>
 
-                                                    <th className="px-4 py-3 text-left font-medium text-gray-600">
+                                                    <th className="px-4 py-3 text-center font-medium text-gray-600 flex-1">
                                                         Submitted At
                                                     </th>
 
-                                                    <th className="w-28 px-4 py-3 text-left font-medium text-gray-600">
+                                                    <th className="px-4 py-3 text-center font-medium text-gray-600 w-1/5">
                                                         Rating
                                                     </th>
 
-                                                    <th className="w-28 px-4 py-3 text-left font-medium text-gray-600">
+                                                    <th className="px-4 py-3 text-center font-medium text-gray-600 w-1/5">
                                                         Action
                                                     </th>
                                                 </tr>
@@ -199,18 +205,18 @@ export default function ReportSubmissionsModal({
                                             </div>
                                         )}
 
-                                        <table className="w-full table-fixed text-sm">
+                                        <table className="w-full text-sm border-collapse">
                                             <tbody className="divide-y divide-gray-200 bg-white">
                                                 {students.map((student, index) => (
                                                     <tr
                                                         key={student.submission_id || student.id}
                                                         className="hover:bg-gray-50"
                                                     >
-                                                        <td className="w-28 px-4 py-3 text-gray-700">
+                                                        <td className="px-4 py-3 text-gray-700 w-1/5 text-center">
                                                             {pagination.from + index}
                                                         </td>
 
-                                                        <td className="px-4 py-3">
+                                                        <td className="px-4 py-3 flex-1 text-center">
                                                             <div className="truncate text-gray-600">
                                                                 {student.submitted_at
                                                                     ? new Date(student.submitted_at).toLocaleString()
@@ -218,19 +224,21 @@ export default function ReportSubmissionsModal({
                                                             </div>
                                                         </td>
 
-                                                        <td className="w-28 px-4 py-3 whitespace-nowrap text-gray-700">
+                                                        <td className="px-4 py-3 text-gray-700 w-1/5 text-center">
                                                             {student.rating_percentage
                                                                 ? `${Number(student.rating_percentage).toFixed(2)}%`
                                                                 : '-'}
                                                         </td>
 
-                                                        <td className="w-28 px-4 py-3">
-                                                            <button
-                                                                onClick={() => handleViewStudent(student)}
-                                                                className="w-full rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
-                                                            >
-                                                                View
-                                                            </button>
+                                                        <td className="px-4 py-3 w-1/5">
+                                                            <div className="flex justify-center">
+                                                                <button
+                                                                    onClick={() => handleViewStudent(student)}
+                                                                    className="rounded-md bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                                                                >
+                                                                    View
+                                                                </button>
+                                                            </div>
                                                         </td>
                                                     </tr>
                                                 ))}
@@ -339,6 +347,7 @@ export default function ReportSubmissionsModal({
                 onClose={handleCloseDrawer}
                 student={selectedStudent}
                 courseCode={courseCode}
+                courseDescription={apiCourseDescription || courseDesc}
                 termId={termId}
             />
         </>

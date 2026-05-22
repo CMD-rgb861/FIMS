@@ -12,6 +12,7 @@ class SubmissionController extends Controller
     {
         $validated = $request->validate([
             'course_code' => 'required|string',
+            'course_description' => 'nullable|string',
             'year_section' => 'nullable|string',
             'instructor_id' => 'nullable|string',
             'term_id' => 'nullable|string',
@@ -38,7 +39,8 @@ class SubmissionController extends Controller
                     'ses.student_id_number',
                     'ses.submitted_at',
                     'ses.rating_percentage',
-                    'ses.total_score'
+                    'ses.total_score',
+                    'ec.course_description',
                 )
                 ->where('ec.course_code', $validated['course_code'])
                 ->whereNotNull('ses.submitted_at');
@@ -77,7 +79,7 @@ class SubmissionController extends Controller
                 return response()->json([
                     'success' => true,
                     'students' => [],
-
+                    'course_description' => $validated['course_description'] ?? null,
                     'pagination' => [
                         'current_page' => $paginatedSubmissions->currentPage(),
                         'last_page' => $paginatedSubmissions->lastPage(),
@@ -112,7 +114,7 @@ class SubmissionController extends Controller
                 return response()->json([
                     'success' => true,
                     'students' => $students,
-
+                    'course_description' => $submissions->first()->course_description ?? $validated['course_description'] ?? null,
                     'pagination' => [
                         'current_page' => $paginatedSubmissions->currentPage(),
                         'last_page' => $paginatedSubmissions->lastPage(),
@@ -154,10 +156,12 @@ class SubmissionController extends Controller
                 'term_id' => $validated['term_id'] ?? null
             ]);
 
+            $courseDescription = $submissions->first()->course_description ?? $validated['course_description'] ?? null;
+
             return response()->json([
                 'success' => true,
                 'students' => $students,
-
+                'course_description' => $courseDescription,
                 'pagination' => [
                     'current_page' => $paginatedSubmissions->currentPage(),
                     'last_page' => $paginatedSubmissions->lastPage(),
