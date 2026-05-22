@@ -539,7 +539,13 @@ class ReportsController extends Controller
 
         } elseif ($user->isUnitHead()) {
 
-            $usersQuery->where('unit_id', $user->unit_id);
+            $unitId = $user->unit_id ?? $user->unitHead?->unit_id ?? null;
+
+            if ($unitId === null) {
+                return [];
+            }
+
+            $usersQuery->where('unit_id', $unitId);
 
         } else {
 
