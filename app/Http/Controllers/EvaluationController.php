@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Traits\FacultyData;
 use App\Models\SupervisorEvaluationSubmission;
+use App\Models\SupervisorEvaluationAnswer;
 use App\Models\Poes\PoesSubjects;
 use App\Models\UnitHeadGrade;
 use Carbon\Carbon;
@@ -21,7 +22,7 @@ class EvaluationController extends Controller
         $facultyEvaluations = $this->getFacultyEvaluations();
         $currentUser = $request->user();
         $canAccessEvaluation = $this->canAccessEvaluationForUser($currentUser);
-        abort_if(! $canAccessEvaluation, 403); // Backend access gate remains
+        abort_if(! $canAccessEvaluation, 403);
 
         $schoolYearRows = DB::connection('lnu_poes')
             ->table('school_years')
@@ -56,6 +57,7 @@ class EvaluationController extends Controller
             ['label' => 'For Evaluation', 'value' => 'for-evaluation'],
             ['label' => 'Evaluated', 'value' => 'evaluated'],
         ];
+        
         $selectedSchoolYear = $request->query('sy', $schoolYears[0]['value'] ?? '');
         $selectedSchoolYearId = ctype_digit((string) $selectedSchoolYear)
             ? (int) $selectedSchoolYear
@@ -98,38 +100,49 @@ class EvaluationController extends Controller
             ->values()
             ->all();
 
-        $evaluatedInstructors = SupervisorEvaluationSubmission::query()
+        // Get evaluated instructors with their submissions (with answers)
+        $evaluatedSubmissions = SupervisorEvaluationSubmission::query()
+            ->with('answers')
             ->where('user_id', $currentUser->id)
+            ->get();
+
+        $evaluatedInstructors = $evaluatedSubmissions
             ->pluck('instructor')
             ->unique()
             ->values()
             ->all();
 
-        $latestEvaluationsByInstructor = SupervisorEvaluationSubmission::query()
-            ->where('user_id', $currentUser->id)
-            ->latest('submitted_at')
-            ->get()
+        $latestEvaluationsByInstructor = $evaluatedSubmissions
+            ->sortByDesc('submitted_at')
             ->unique('instructor')
             ->keyBy('instructor');
 
         $evaluations = array_map(function ($faculty) use ($evaluatedInstructors, $latestEvaluationsByInstructor) {
             $primarySubject = $faculty['subjects'][0] ?? ['code' => '', 'title' => '', 'term' => ''];
             $latestEvaluation = $latestEvaluationsByInstructor->get($faculty['instructor']);
-            $ratings = $latestEvaluation?->ratings ?? [];
-            $scores = collect($ratings)
-                ->map(function ($score, $benchmark) {
-                    return [
-                        'benchmark' => $benchmark,
-                        'score' => (int) $score,
+            
+            // Build scores from answers instead of ratings JSON
+            $scores = [];
+            $totalScore = 0;
+            
+            if ($latestEvaluation && $latestEvaluation->answers) {
+                $answers = $latestEvaluation->answers->sortBy(function ($answer) {
+                    // Extract number from question_key (e.g., "q1" -> 1)
+                    return (int) preg_replace('/[^0-9]/', '', $answer->question_key);
+                });
+                
+                foreach ($answers as $answer) {
+                    $scores[] = [
+                        'benchmark' => $answer->question_key,
+                        'score' => $answer->score,
                     ];
-                })
-                ->sortBy(function ($row) {
-                    return (int) preg_replace('/[^0-9]/', '', $row['benchmark']);
-                })
-                ->values()
-                ->all();
-            $totalScore = collect($scores)->sum('score');
-            $ratingPercentage = round(($totalScore / 75) * 100, 2);
+                    $totalScore += $answer->score;
+                }
+            }
+            
+            $maxScore = $latestEvaluation?->max_score ?? 75;
+            $ratingPercentage = $latestEvaluation?->rating_percentage 
+                ?? ($maxScore > 0 ? round(($totalScore / $maxScore) * 100, 2) : 0);
 
             return [
                 'initials' => $faculty['initials'],
@@ -140,13 +153,17 @@ class EvaluationController extends Controller
                 'subjects' => $faculty['subjects'],
                 'evaluated' => in_array($faculty['instructor'], $evaluatedInstructors, true),
                 'evaluation_result' => $latestEvaluation ? [
+                    'id' => $latestEvaluation->id,
                     'instructor' => $latestEvaluation->instructor,
                     'course_code' => $latestEvaluation->course_code,
                     'course_title' => $latestEvaluation->course_title,
                     'term' => $latestEvaluation->term,
                     'scores' => $scores,
-                    'total_score' => $totalScore,
-                    'rating_percentage' => $ratingPercentage,
+                    'total_score' => $latestEvaluation->total_score,
+                    'max_score' => $latestEvaluation->max_score,
+                    'rating_percentage' => $latestEvaluation->rating_percentage,
+                    'submitted_at' => $latestEvaluation->submitted_at,
+                    'status' => $latestEvaluation->status,
                 ] : null,
             ];
         }, $facultyEvaluations);

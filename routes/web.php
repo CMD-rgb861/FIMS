@@ -25,9 +25,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/evaluations', [FacultyEvaluationController::class, 'store'])->name('evaluations.store');
     Route::get('/grades', [GradesController::class, 'index'])->name('grades');
     Route::post('/unit-head-grades', [UnitHeadGradeController::class, 'store'])->name('unit-head-grades.store');
+
     Route::get('/reports', [ReportsController::class, 'index'])->name('reports');
     Route::get('/reports/faculty/{instructor}', [ReportsController::class, 'faculty'])->name('reports.faculty');
     Route::get('/reports/faculty/{instructor}/breakdown', [ReportEvaluationController::class, 'breakdown'])->name('reports.faculty.breakdown');
+    Route::get('/reports/faculty/subject/{instructor}/{course_code}', [ReportsController::class, 'facultySubjectDetail'])->name('reports.faculty.subject');
     
     Route::get('/submissions', [SubmissionController::class, 'getSubmissions']);
     Route::get('/answers/{submissionId}', [AnswerController::class, 'getAnswers']);

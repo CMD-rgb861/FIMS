@@ -114,7 +114,7 @@ export default function Sidebar({
                             <path d="M17 16v-4" />
                         </svg>
                     </span>
-                    <span className="text-sm font-medium">Reports</span>
+                    <span className="text-sm font-medium">Evaluation Reports</span>
                 </a>
 
                 <a href={profileUrl} className={navClass('profile')}>

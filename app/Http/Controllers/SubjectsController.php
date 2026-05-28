@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Traits\FacultyData;
@@ -6,7 +7,6 @@ use App\Models\UnitHeadGrade;
 use App\Models\Poes\PoesSubjects;
 use Inertia\Inertia;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
 
 class SubjectsController extends Controller
@@ -15,247 +15,246 @@ class SubjectsController extends Controller
 
     public function index(Request $request)
     {
-        $facultyEvaluations = $this->getFacultyEvaluations();
         $currentUser = $request->user();
-        $profilePhotoUrl = $currentUser?->personalInformation?->profile_photo_path
-            ? asset('storage/' . $currentUser->personalInformation->profile_photo_path)
-            : null;
-
-        $firstName = trim((string) ($currentUser?->firstname ?? ''));
-        $lastName = trim((string) ($currentUser?->lastname ?? ''));
-
-        try {
-            $normalizedLastName = mb_strtolower(trim($lastName));
-            $normalizedIdNo = preg_replace('/\s+/', '', (string) ($currentUser?->id_no ?? ''));
-
-            $rows = PoesSubjects::query()
-            ->where(function ($q) use ($currentUser, $lastName, $normalizedIdNo) {
-                $idNo = $currentUser?->id_no;
-
-                if ($idNo) {
-                    $q->orWhereRaw('CAST(id_number AS CHAR) = ?', [(string) $idNo]);
-                    $q->orWhereRaw('CAST(id_no AS CHAR) = ?', [(string) $idNo]);
+        $facultyEvaluations = $this->getFacultyEvaluations();
+        
+        // Get available terms from the school_years table (all terms, not just active)
+        $availableTerms = DB::connection('lnu_poes')
+            ->table('school_years')
+            ->orderByDesc('school_year_from')
+            ->orderByDesc('semester')
+            ->get()
+            ->map(function ($term) {
+                $semesterText = '';
+                switch ($term->semester) {
+                    case 1: $semesterText = '1st Semester'; break;
+                    case 2: $semesterText = '2nd Semester'; break;
+                    case 3: $semesterText = 'Summer'; break;
+                    default: $semesterText = "Semester {$term->semester}";
                 }
-
-                if ($normalizedIdNo) {
-                    $q->orWhereRaw('CAST(id_number AS CHAR) = ?', [$normalizedIdNo]);
-                }
-
-                if ($lastName !== '') {
-                    $q->orWhereRaw(
-                        'LOWER(TRIM(instructor)) LIKE ?',
-                        ['%' . mb_strtolower(trim($lastName)) . '%']
-                    );
-                }
+                
+                return [
+                    'id' => $term->id,
+                    'label' => "S.Y. {$term->school_year_from}-{$term->school_year_to} - {$semesterText}",
+                ];
             })
-            ->paginate(10)->withQueryString();
+            ->toArray();
+        
+        // Handle term parameter - expecting ID
+        $termParam = $request->query('term', null);
 
-            $baseQuery = PoesSubjects::query()
-            ->where(function ($q) use ($currentUser, $lastName, $normalizedIdNo) {
-                $idNo = $currentUser?->id_no;
+        $selectedTermId = null;
 
-                if ($idNo) {
-                    $q->orWhereRaw('CAST(id_number AS CHAR) = ?', [(string) $idNo]);
-                    $q->orWhereRaw('CAST(id_no AS CHAR) = ?', [(string) $idNo]);
-                }
-
-                if ($normalizedIdNo) {
-                    $q->orWhereRaw('CAST(id_number AS CHAR) = ?', [$normalizedIdNo]);
-                }
-
-                if ($lastName !== '') {
-                    $q->orWhereRaw(
-                        'LOWER(TRIM(instructor)) LIKE ?',
-                        ['%' . mb_strtolower(trim($lastName)) . '%']
-                    );
-                }
-            })
-            ->orderByRaw('CAST(school_year_id AS UNSIGNED) DESC')
-            ->orderByDesc('id');
-
-        $rows = $baseQuery->paginate(10)->withQueryString();
-        } catch (\Exception $e) {
-            $rows = PoesSubjects::query()->paginate(10);
-        }
-
-        $schoolYearMetaById = [];
-
-        try {
-            $poesSchema = Schema::connection('lnu_poes');
-            $schoolYearTable = null;
-
-            foreach (['school_years', 'school_year', 'schoolyear'] as $candidate) {
-                if ($poesSchema->hasTable($candidate)) {
-                    $schoolYearTable = $candidate;
-                    break;
-                }
-            }
-
-            if ($schoolYearTable !== null) {
-                $columns = $poesSchema->getColumnListing($schoolYearTable);
-
-                $idColumn = in_array('id', $columns, true)
-                    ? 'id'
-                    : (in_array('school_year_id', $columns, true) ? 'school_year_id' : null);
-
-                $semesterColumn = null;
-                foreach (['semester', 'term', 'semester_name', 'term_name'] as $candidate) {
-                    if (in_array($candidate, $columns, true)) {
-                        $semesterColumn = $candidate;
-                        break;
-                    }
-                }
-
-                $yearFromColumn = null;
-                foreach (['school_year_from', 'year_from', 'start_year'] as $candidate) {
-                    if (in_array($candidate, $columns, true)) {
-                        $yearFromColumn = $candidate;
-                        break;
-                    }
-                }
-
-                $yearToColumn = null;
-                foreach (['school_year_to', 'year_to', 'end_year'] as $candidate) {
-                    if (in_array($candidate, $columns, true)) {
-                        $yearToColumn = $candidate;
-                        break;
-                    }
-                }
-
-                if ($idColumn !== null) {
-                    $schoolYearRows = DB::connection('lnu_poes')
-                        ->table($schoolYearTable)
-                        ->orderByDesc(DB::raw("CAST({$yearFromColumn} AS UNSIGNED)"))
-                        ->selectRaw($idColumn . ' as ref_id')
-                        ->when($semesterColumn !== null, function ($query) use ($semesterColumn) {
-                            $query->selectRaw($semesterColumn . ' as ref_semester');
-                        })
-                        ->when($yearFromColumn !== null, function ($query) use ($yearFromColumn) {
-                            $query->selectRaw($yearFromColumn . ' as ref_year_from');
-                        })
-                        ->when($yearToColumn !== null, function ($query) use ($yearToColumn) {
-                            $query->selectRaw($yearToColumn . ' as ref_year_to');
-                        })
-                        ->get();
-
-                    foreach ($schoolYearRows as $metaRow) {
-                        $refId = (string) ($metaRow->ref_id ?? '');
-
-                        if ($refId === '') {
-                            continue;
-                        }
-
-                        $semester = trim((string) ($metaRow->ref_semester ?? ''));
-                        $yearFrom = trim((string) ($metaRow->ref_year_from ?? ''));
-                        $yearTo = trim((string) ($metaRow->ref_year_to ?? ''));
-
-                        $schoolYearLabel = '';
-                        if ($yearFrom !== '' && $yearTo !== '') {
-                            $schoolYearLabel = 'S.Y. ' . $yearFrom . '-' . $yearTo;
-                        }
-
-                        $termLabel = trim(collect([$schoolYearLabel, $semester])->filter()->implode(' - '));
-
-                        $schoolYearMetaById[$refId] = [
-                            'semester' => $semester !== '' ? $semester : null,
-                            'term' => $termLabel !== '' ? $termLabel : null,
-                        ];
-                    }
-                }
-            }
-        } catch (\Exception $e) {
-            $schoolYearMetaById = [];
-        }
-
-        $availableTerms = collect($schoolYearMetaById)
-            ->pluck('term')
-            ->filter(function ($value) {
-                return is_string($value) && trim($value) !== '';
-            })
-            ->map(function ($value) {
-                return trim((string) $value);
-            })
-            ->unique()
-            ->sortDesc()
-            ->values()
-            ->all();
-
-        if (empty($availableTerms)) {
-            try {
-                $availableTerms = PoesSubjects::query()
-                    ->select('school_year_id')
-                    ->whereNotNull('school_year_id')
-                    ->orderByDesc('school_year_id')
-                    ->distinct()
-                    ->pluck('school_year_id')
-                    ->map(function ($schoolYearId) use ($schoolYearMetaById) {
-                        $schoolYearId = (string) $schoolYearId;
-                        $metaTerm = $schoolYearMetaById[$schoolYearId]['term'] ?? null;
-
-                        if (is_string($metaTerm) && trim($metaTerm) !== '') {
-                            return trim($metaTerm);
-                        }
-
-                        return 'School Year #' . $schoolYearId;
-                    })
-                    ->filter(function ($value) {
-                        return is_string($value) && trim($value) !== '';
-                    })
-                    ->unique()
-                    ->sortDesc()
-                    ->values()
-                    ->all();
-            } catch (\Exception $e) {
-                $availableTerms = [];
+        // If a specific term is requested
+        if ($termParam && $termParam !== 'all' && $termParam !== '') {
+            $selectedTermId = is_numeric($termParam) ? (int) $termParam : null;
+        } 
+        // If no term is selected, default to the latest term (most recent school year and semester)
+        elseif (empty($termParam) || $termParam === '') {
+            // Get the latest term (most recent school_year_from and semester)
+            $latestTerm = DB::connection('lnu_poes')
+                ->table('school_years')
+                ->orderByDesc('school_year_from')
+                ->orderByDesc('semester')
+                ->first();
+            
+            if ($latestTerm) {
+                $selectedTermId = $latestTerm->id;
             }
         }
-
-        $subjects = collect($rows->items())->map(function ($row) use ($schoolYearMetaById) {
-            $row = is_array($row) ? $row : (method_exists($row, 'toArray') ? $row->toArray() : (array) $row);
-
-            $schoolYearId = isset($row['school_year_id']) ? (string) $row['school_year_id'] : '';
-            $schoolYearMeta = $schoolYearId !== '' ? ($schoolYearMetaById[$schoolYearId] ?? null) : null;
-
-            $semester = trim((string) ($row['semester'] ?? $row['term'] ?? ($schoolYearMeta['semester'] ?? '')));
-            $term = trim((string) ($row['term'] ?? ($schoolYearMeta['term'] ?? '')));
-
-            if ($term === '' && $semester !== '') {
-                $term = $semester;
-            }
-
-            if ($term === '' && $schoolYearId !== '') {
-                $term = 'School Year #' . $schoolYearId;
-            }
-
+        
+        // Get subjects with pagination and term filter using ID
+        $subjects = $this->getUserSubjects($currentUser, $selectedTermId);
+        
+        // Get school year metadata for additional context
+        $schoolYearMetaById = $this->getSchoolYearMetaById();
+        
+        // Transform subjects
+        $transformedSubjects = $subjects->map(function ($row) use ($schoolYearMetaById) {
+            $schoolYearId = $row->school_year_id;
+            $meta = $schoolYearMetaById[$schoolYearId] ?? null;
+            
             return [
-                'course_code' => $row['course_code'] ?? '',
-                'course_description' => $row['course_description'] ?? '',
-                'course_units' => $row['course_units'] ?? null,
-                'section_code' => $row['section_code'] ?? null,
-                'schedule_time' => $row['schedule_time'] ?? null,
-                'schedule_days' => $row['schedule_days'] ?? null,
-                'room' => $row['room'] ?? null,
-                'school_year_id' => $row['school_year_id'] ?? null,
-                'semester' => $semester !== '' ? $semester : null,
-                'term' => $term !== '' ? $term : null,
+                'id' => $row->id,
+                'course_code' => $row->course_code ?? '',
+                'course_description' => $row->course_description ?? '',
+                'course_units' => $row->course_units ?? null,
+                'section_code' => $row->section_code ?? null,
+                'schedule_time' => $row->schedule_time ?? null,
+                'schedule_days' => $row->schedule_days ?? null,
+                'room' => $row->room ?? null,
+                'school_year_id' => $schoolYearId,
+                'school_year_label' => $meta ? "S.Y. {$meta['year_from']}-{$meta['year_to']}" : null,
+                'semester' => $meta ? $this->getSemesterText($meta['semester']) : null,
+                'instructor' => $row->instructor ?? null,
+                'id_no' => $row->id_no ?? null,
             ];
         })->values()->all();
-
+        
         $subjectsProps = $this->commonInertiaProps($currentUser, [
-            'subjects' => $subjects,
+            'subjects' => $transformedSubjects,
             'subjectPagination' => [
-                'current_page' => $rows->currentPage(),
-                'last_page' => $rows->lastPage(),
-                'per_page' => $rows->perPage(),
-                'total' => $rows->total(),
+                'current_page' => $subjects->currentPage(),
+                'last_page' => $subjects->lastPage(),
+                'per_page' => $subjects->perPage(),
+                'total' => $subjects->total(),
             ],
             'availableTerms' => $availableTerms,
+            'selectedTerm' => $selectedTermId,
             'hasPendingEvaluations' => UnitHeadGrade::query()
                 ->where('user_id', $currentUser->id)
                 ->distinct('instructor')
                 ->count('instructor') < count($facultyEvaluations),
         ]);
-
+        
         return Inertia::render('SubjectsPage', $subjectsProps);
+    }
+    
+    /**
+     * Get user subjects with optimized query and term filter using ID
+     * - Groups by course_code + section_code + school_year_id to prevent duplicates
+     */
+    private function getUserSubjects($currentUser, $selectedTermId = null)
+    {
+        $lastName = trim((string) ($currentUser->lastname ?? ''));
+        $idNo = $currentUser->id_no ?? '';
+        
+        $query = PoesSubjects::query();
+        
+        // Build conditions efficiently
+        if ($idNo) {
+            $query->where(function ($q) use ($idNo) {
+                $q->where('id_number', $idNo)
+                ->orWhere('id_no', $idNo);
+            });
+        } elseif ($lastName !== '') {
+            $query->whereRaw('LOWER(TRIM(instructor)) LIKE ?', ['%' . mb_strtolower($lastName) . '%']);
+        } else {
+            // If no id_no and no last name, return empty result
+            return PoesSubjects::query()->whereRaw('1 = 0')->paginate(10);
+        }
+        
+        // Apply term filter using ID
+        if ($selectedTermId && $selectedTermId !== 'all') {
+            $query->where('school_year_id', $selectedTermId);
+        }
+        
+        // Group by unique subject combination
+        // This selects MIN(id) to get a representative row for each group
+        $query->select(
+            'course_code',
+            'school_year_id',
+            DB::raw('MIN(id) as id'),
+            DB::raw('MAX(course_description) as course_description'),
+            DB::raw('MAX(course_units) as course_units'),
+            DB::raw('MAX(schedule_time) as schedule_time'),
+            DB::raw('MAX(schedule_days) as schedule_days'),
+            DB::raw('MAX(room) as room'),
+            DB::raw('MAX(instructor) as instructor'),
+            DB::raw('MAX(id_no) as id_no'),
+            DB::raw('MAX(id_number) as id_number'),
+            DB::raw('COALESCE(section_code, "NO_SECTION") as section_code')
+        )
+        ->groupBy('course_code', 'section_code', 'school_year_id')
+        ->orderByRaw('CAST(school_year_id AS UNSIGNED) DESC')
+        ->orderBy('course_code');
+        
+        // Order and paginate
+        return $query->paginate(10);
+    }
+    
+    /**
+     * Get school year metadata by ID
+     */
+    private function getSchoolYearMetaById(): array
+    {
+        $schoolYears = DB::connection('lnu_poes')
+            ->table('school_years')
+            ->get();
+        
+        $metaById = [];
+        
+        foreach ($schoolYears as $sy) {
+            $metaById[$sy->id] = [
+                'year_from' => $sy->school_year_from,
+                'year_to' => $sy->school_year_to,
+                'semester' => $sy->semester,
+            ];
+        }
+        
+        return $metaById;
+    }
+    
+    /**
+     * Convert semester number to text
+     */
+    private function getSemesterText($semester)
+    {
+        switch ($semester) {
+            case 1: return '1st Semester';
+            case 2: return '2nd Semester';
+            case 3: return 'Summer';
+            default: return $semester ? "Semester {$semester}" : null;
+        }
+    }
+    
+    /**
+     * Get detailed view of a specific subject
+     */
+    public function show(Request $request, $id)
+    {
+        $currentUser = $request->user();
+        
+        $subject = PoesSubjects::findOrFail($id);
+        
+        // Verify user has access to this subject
+        $lastName = trim((string) ($currentUser->lastname ?? ''));
+        $idNo = $currentUser->id_no ?? '';
+        
+        $hasAccess = false;
+        if ($idNo) {
+            $hasAccess = ($subject->id_number == $idNo || $subject->id_no == $idNo);
+        } elseif ($lastName !== '') {
+            $hasAccess = stripos($subject->instructor, $lastName) !== false;
+        }
+        
+        if (!$hasAccess && !$currentUser->isAdmin() && !$currentUser->isDean() && !$currentUser->isAssociateDean() && !$currentUser->isUnitHead()) {
+            abort(403, 'Unauthorized access to this subject.');
+        }
+        
+        // Get term info
+        $termLabel = null;
+        if ($subject->school_year_id) {
+            $term = DB::connection('lnu_poes')
+                ->table('school_years')
+                ->where('id', $subject->school_year_id)
+                ->first();
+            
+            if ($term) {
+                $semesterText = $this->getSemesterText($term->semester);
+                $termLabel = "S.Y. {$term->school_year_from}-{$term->school_year_to} - {$semesterText}";
+            }
+        }
+        
+        $subjectData = [
+            'id' => $subject->id,
+            'course_code' => $subject->course_code,
+            'course_description' => $subject->course_description,
+            'course_units' => $subject->course_units,
+            'section_code' => $subject->section_code,
+            'schedule_time' => $subject->schedule_time,
+            'schedule_days' => $subject->schedule_days,
+            'room' => $subject->room,
+            'instructor' => $subject->instructor,
+            'id_no' => $subject->id_no,
+            'term_label' => $termLabel,
+            'school_year_id' => $subject->school_year_id,
+        ];
+        
+        $props = $this->commonInertiaProps($currentUser, [
+            'subject' => $subjectData,
+        ]);
+        
+        return Inertia::render('SubjectDetailPage', $props);
     }
 }

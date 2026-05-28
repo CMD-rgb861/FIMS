@@ -38,6 +38,9 @@ class HandleInertiaRequests extends Middleware
                 ? asset('storage/' . $user->personalInformation->profile_photo_path)
                 : null;
 
+            // Prefer calling resolveRole() when available (reliable even if attribute accessors behave oddly)
+            $role = method_exists($user, 'resolveRole') ? $user->resolveRole() : ($user->role ?? null);
+
             $sharedUser = [
                     'id' => $user->id,
                     'id_no' => $user->id_no,
@@ -47,11 +50,12 @@ class HandleInertiaRequests extends Middleware
                     'extname' => $user->extname,
                     'profile_photo_url' => $profilePhotoUrl,
 
-                    // NO METHOD CALLS (IMPORTANT)
-                    'role' => $user->role ?? null,
-                    'isAdmin' => $user->role === 'admin',
-                    'isDean' => $user->role === 'dean',
-                    'isUnitHead' => $user->role === 'unit_head',
+                    // Use resolved role explicitly
+                    'role' => $role,
+                    'isAdmin' => $role === 'admin',
+                    'isDean' => $role === 'dean',
+                    'isAssociateDean' => $role === 'associate_dean',
+                    'isUnitHead' => $role === 'unit_head',
                 ];
         }
 

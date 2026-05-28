@@ -62,6 +62,7 @@ export default function StudentAnswersDrawer({
     termId,
 }) {
     const [answers, setAnswers] = useState({});
+    const [comment, setComment] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
     const [editedAnswers, setEditedAnswers] = useState({});
@@ -89,6 +90,9 @@ export default function StudentAnswersDrawer({
                 });
             }
             setAnswers(answersMap);
+            setComment(response.data.submission?.comment || '');
+
+            
         } catch (err) {
             console.error('Failed to fetch answers:', err);
             toast.error('Failed to load answers. Please try again.');
@@ -281,6 +285,16 @@ export default function StudentAnswersDrawer({
                             })}
                         </div>
                     )}
+                    {/* Comment Section */}
+                    <div className="mt-8">
+                        <h4 className="text-md font-semibold text-gray-900 bg-gray-100 px-4 py-2 rounded-lg mb-3">
+                            Student Comment
+                        </h4>
+
+                        <div className="bg-gray-50 border border-gray-200 rounded-md p-4 text-sm text-gray-700 whitespace-pre-wrap">
+                            {comment ? comment : 'No comment provided.'}
+                        </div>
+                    </div>
                 </div>
 
                 {/* Footer */}

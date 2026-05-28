@@ -59,6 +59,11 @@ class User extends Authenticatable
         return $this->hasOne(Dean::class);
     }
 
+    public function associateDean(): HasOne
+    {
+        return $this->hasOne(AssociateDean::class);
+    }
+
     public function unit(): BelongsTo
     {
         return $this->belongsTo(Unit::class);
@@ -83,6 +88,10 @@ class User extends Authenticatable
 
         if ($this->dean()->exists()) {
             return 'dean';
+        }
+
+        if ($this->associateDean()->exists()) {
+            return 'associate_dean';
         }
 
         if ($this->unitHead()->exists()) {
@@ -120,13 +129,24 @@ class User extends Authenticatable
         return $this->dean()->exists();
     }
 
+    public function isAssociateDean(): bool
+    {
+        return $this->associateDean()->exists();
+    }
+
     public function isUnitHead(): bool
     {
         return $this->unitHead()->exists();
     }
+    
+    public function isFaculty(): bool
+    {
+        // A user is faculty if they are NOT admin, NOT dean, NOT associate dean, and NOT unit head
+        return !$this->isAdmin() && !$this->isDean() && !$this->isAssociateDean() && !$this->isUnitHead();
+    }
 
     public function canEvaluateFaculty(): bool
     {
-        return $this->isAdmin() || $this->isDean() || $this->isUnitHead();
+        return $this->isAdmin() || $this->isDean() || $this->isAssociateDean() || $this->isUnitHead();
     }
 }

@@ -25,6 +25,11 @@ class College extends Model
         return $this->hasMany(Dean::class);
     }
 
+    public function associateDeans(): HasMany
+    {
+        return $this->hasMany(AssociateDean::class);
+    }
+
     public function users(): HasMany
     {
         return $this->hasMany(User::class);

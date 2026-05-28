@@ -218,11 +218,14 @@ trait FacultyData
             return [];
         }
 
-        if (!method_exists($user, 'isDean') || !$user->isDean()) {
+        if (!(
+            (method_exists($user, 'isDean') && $user->isDean())
+            || (method_exists($user, 'isAssociateDean') && $user->isAssociateDean())
+        )) {
             return [];
         }
 
-        $collegeId = $user->college_id ?? null;
+        $collegeId = $user->dean?->college_id ?? $user->associateDean?->college_id ?? $user->college_id ?? null;
         if (!$collegeId) return [];
 
         try {
@@ -271,6 +274,7 @@ trait FacultyData
             'role' => method_exists($user, 'resolveRole') ? $user->resolveRole() : null,
             'isAdmin' => method_exists($user, 'isAdmin') ? $user->isAdmin() : false,
             'isDean' => method_exists($user, 'isDean') ? $user->isDean() : false,
+            'isAssociateDean' => method_exists($user, 'isAssociateDean') ? $user->isAssociateDean() : false,
             'isUnitHead' => method_exists($user, 'isUnitHead') ? $user->isUnitHead() : false,
             'canEvaluateFaculty' => method_exists($user, 'canEvaluateFaculty') ? $user->canEvaluateFaculty() : false,
         ];
