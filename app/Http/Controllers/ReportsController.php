@@ -156,7 +156,11 @@ class ReportsController extends Controller
                 $overallSefRating = null;
 
                 if ($subjectsCount > 0) {
-                    $overallSetRating = $this->getFacultyOverallSetRating($faculty['instructor'] ?? null, $termId);
+                    $overallSetRating = $this->getFacultyOverallSetRating(
+                        $faculty['id_no'] ?? null,
+                        $faculty['instructor'] ?? null,
+                        $termId
+                    );
 
                     $averageSefRating = $sefAveragesByUser->get((int) ($faculty['user_id'] ?? 0));
                     if ($averageSefRating !== null) {
@@ -710,22 +714,21 @@ class ReportsController extends Controller
         }));
     }
 
-    private function getFacultyOverallSetRating(?string $instructor, ?int $termId = null): ?float
+    private function getFacultyOverallSetRating(?string $idNo, ?string $instructor = null, ?int $termId = null): ?float
         {
-            if ($instructor === null || trim($instructor) === '') {
+            $normalizedIdNo = trim((string) ($idNo ?? ''));
+            $normalizedInstructor = trim((string) ($instructor ?? ''));
+
+            if ($normalizedIdNo === '' && $normalizedInstructor === '') {
                 return null;
             }
 
             static $cache = [];
-            $cacheKey = mb_strtoupper(trim($instructor)) . '|' . ($termId ?? 'all');
+            $cacheKey = ($normalizedIdNo !== '' ? 'id:' . $normalizedIdNo : 'name:' . mb_strtoupper($normalizedInstructor)) . '|' . ($termId ?? 'all');
 
             if (array_key_exists($cacheKey, $cache)) {
                 return $cache[$cacheKey];
             }
-
-            // Tokenize instructor name
-            $tokens = preg_split('/[^\pL\pN]+/u', mb_strtoupper(trim($instructor))) ?: [];
-            $tokens = array_values(array_filter($tokens, fn($token) => mb_strlen($token) > 1));
 
             // Get all subjects and their submissions for this instructor
             $query = DB::connection('lnu_poes')
@@ -737,8 +740,14 @@ class ReportsController extends Controller
                 ->whereNotNull('ses.rating_percentage')
                 ->groupBy('ec.course_code', 'ec.section_code');
 
-            // Apply instructor filter
-            if (!empty($tokens)) {
+            // Apply instructor filter using id_no first for strict matching.
+            if ($normalizedIdNo !== '') {
+                $query->where('ec.id_no', $normalizedIdNo);
+            } elseif ($normalizedInstructor !== '') {
+                // Fallback only when id_no is unavailable.
+                $tokens = preg_split('/[^\pL\pN]+/u', mb_strtoupper($normalizedInstructor)) ?: [];
+                $tokens = array_values(array_filter($tokens, fn($token) => mb_strlen($token) > 1));
+
                 foreach ($tokens as $token) {
                     $query->where('ec.instructor', 'like', '%' . $token . '%');
                 }

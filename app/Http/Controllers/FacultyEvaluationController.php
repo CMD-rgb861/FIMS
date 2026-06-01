@@ -23,18 +23,21 @@ class FacultyEvaluationController extends Controller
             'course_code' => ['required', 'string', 'max:100'],
             'course_title' => ['nullable', 'string', 'max:255'],
             'term' => ['required', 'string', 'max:255'],
+            'term_id' => ['nullable', 'string', 'max:255'],
             'answers' => ['required', 'array', 'min:1'],
             'answers.*' => ['required', 'numeric', 'between:1,5'],
             'comments' => ['nullable', 'string', 'max:2000'],
         ]);
 
+        $submissionTerm = trim((string) ($validated['term_id'] ?? $validated['term']));
+
         // Check if user already submitted for this instructor, course, and term
-        $existingSubmission = SupervisorEvaluationSubmission::where([
-            'user_id' => $request->user()->id,
-            'instructor' => $validated['instructor'],
-            'course_code' => $validated['course_code'],
-            'term' => $validated['term'],
-        ])->first();
+        $existingSubmission = SupervisorEvaluationSubmission::query()
+            ->where('user_id', $request->user()->id)
+            ->where('instructor', $validated['instructor'])
+            ->where('course_code', $validated['course_code'])
+            ->where('term', $submissionTerm)
+            ->first();
 
         if ($existingSubmission) {
             return response()->json([
@@ -58,7 +61,7 @@ class FacultyEvaluationController extends Controller
                 'instructor' => $validated['instructor'],
                 'course_code' => $validated['course_code'],
                 'course_title' => trim((string) ($validated['course_title'] ?? '')),
-                'term' => $validated['term'],
+                'term' => $submissionTerm,
                 'total_score' => $totalScore,
                 'max_score' => $maxScore,
                 'rating_percentage' => round($ratingPercentage, 2),

@@ -24,10 +24,19 @@ class EvaluationController extends Controller
         $canAccessEvaluation = $this->canAccessEvaluationForUser($currentUser);
         abort_if(! $canAccessEvaluation, 403);
 
+        $activeSchoolYear = DB::connection('lnu_poes')
+            ->table('school_years')
+            ->where('is_active', 1)
+            ->first();
+
+        $activeSchoolYearId = $activeSchoolYear?->id;
+
         $schoolYearRows = DB::connection('lnu_poes')
             ->table('school_years')
             ->select(['id', 'school_year_from', 'school_year_to', 'semester', 'is_active'])
-            ->orderByDesc('id')
+            ->orderByDesc('school_year_to')
+            ->orderByDesc('school_year_from')
+            ->orderByDesc('semester')
             ->get();
 
         $schoolYears = $schoolYearRows
@@ -37,7 +46,12 @@ class EvaluationController extends Controller
                         'S.Y. %s-%s - %s',
                         $row->school_year_from,
                         $row->school_year_to,
-                        $row->semester
+                        match ((int) $row->semester) {
+                            1 => '1st Semester',
+                            2 => '2nd Semester',
+                            3 => 'Summer',
+                            default => 'Semester ' . $row->semester,
+                        }
                     ),
                     'value' => (string) $row->id,
                 ];
@@ -58,38 +72,49 @@ class EvaluationController extends Controller
             ['label' => 'Evaluated', 'value' => 'evaluated'],
         ];
         
-        $selectedSchoolYear = $request->query('sy', $schoolYears[0]['value'] ?? '');
+        $selectedSchoolYearParam = $request->query('term', $request->query('sy', null));
+        $selectedSchoolYear = (!$selectedSchoolYearParam || $selectedSchoolYearParam === 'current' || $selectedSchoolYearParam === 'all')
+            ? (string) ($activeSchoolYearId ?? ($schoolYears[0]['value'] ?? ''))
+            : (is_numeric($selectedSchoolYearParam) ? (string) (int) $selectedSchoolYearParam : (string) ($activeSchoolYearId ?? ($schoolYears[0]['value'] ?? '')));
+
         $selectedSchoolYearId = ctype_digit((string) $selectedSchoolYear)
             ? (int) $selectedSchoolYear
             : null;
         $selectedSchoolYearRow = $selectedSchoolYearId !== null
             ? $schoolYearRows->firstWhere('id', $selectedSchoolYearId)
             : null;
-        $scheduleWindow = null;
+        // Schedule-based opening logic can be restored later if needed.
+        // $scheduleWindow = null;
+        // if ($selectedSchoolYearId !== null) {
+        //     $scheduleWindow = DB::connection('lnu_poes')
+        //         ->table('evaluation_schedules')
+        //         ->where('school_year_id', $selectedSchoolYearId)
+        //         ->orderByDesc('id')
+        //         ->first();
+        // }
+        //
+        // $today = Carbon::today();
+        // $isEvaluationOpen = false;
+        //
+        // if ($scheduleWindow) {
+        //     $scheduleStart = Carbon::parse($scheduleWindow->date_from)->startOfDay();
+        //     $scheduleEnd = Carbon::parse($scheduleWindow->date_extension ?: $scheduleWindow->date_to)->endOfDay();
+        //     $isEvaluationOpen = $today->betweenIncluded($scheduleStart, $scheduleEnd);
+        // } elseif ($selectedSchoolYearRow) {
+        //     $isEvaluationOpen = (bool) $selectedSchoolYearRow->is_active;
+        // }
 
-        if ($selectedSchoolYearId !== null) {
-            $scheduleWindow = DB::connection('lnu_poes')
-                ->table('evaluation_schedules')
-                ->where('school_year_id', $selectedSchoolYearId)
-                ->orderByDesc('id')
-                ->first();
-        }
-
-        $today = Carbon::today();
-        $isEvaluationOpen = false;
-
-        if ($scheduleWindow) {
-            $scheduleStart = Carbon::parse($scheduleWindow->date_from)->startOfDay();
-            $scheduleEnd = Carbon::parse($scheduleWindow->date_extension ?: $scheduleWindow->date_to)->endOfDay();
-            $isEvaluationOpen = $today->betweenIncluded($scheduleStart, $scheduleEnd);
-        } elseif ($selectedSchoolYearRow) {
-            $isEvaluationOpen = (bool) $selectedSchoolYearRow->is_active;
-        }
+        $isEvaluationOpen = true;
 
         $isEvaluationClosed = !$isEvaluationOpen;
         $evaluationStatusLabel = $isEvaluationClosed ? 'Closed Evaluation' : 'Open for Evaluation';
 
-        $selectedTerm = $request->query('term', 'all');
+        $selectedTerm = $request->query(
+            'status',
+            in_array($request->query('term'), ['all', 'for-evaluation', 'evaluated'], true)
+                ? $request->query('term')
+                : 'all'
+        );
         $selectedSubject = $request->query('subject', '');
 
         $subjects = collect($facultyEvaluations)
@@ -117,7 +142,7 @@ class EvaluationController extends Controller
             ->unique('instructor')
             ->keyBy('instructor');
 
-        $evaluations = array_map(function ($faculty) use ($evaluatedInstructors, $latestEvaluationsByInstructor) {
+        $evaluations = array_map(function ($faculty) use ($evaluatedInstructors, $latestEvaluationsByInstructor, $selectedSchoolYearId) {
             $primarySubject = $faculty['subjects'][0] ?? ['code' => '', 'title' => '', 'term' => ''];
             $latestEvaluation = $latestEvaluationsByInstructor->get($faculty['instructor']);
             
@@ -150,6 +175,7 @@ class EvaluationController extends Controller
                 'title' => $primarySubject['title'],
                 'instructor' => $faculty['instructor'],
                 'term' => $primarySubject['term'],
+                'school_year_id' => $selectedSchoolYearId,
                 'subjects' => $faculty['subjects'],
                 'evaluated' => in_array($faculty['instructor'], $evaluatedInstructors, true),
                 'evaluation_result' => $latestEvaluation ? [

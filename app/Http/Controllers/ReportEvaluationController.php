@@ -17,9 +17,9 @@ class ReportEvaluationController extends Controller
 
 
         $query = $this->buildEvaluationQuery(
-            $instructorName !== '' ? $instructorName : null,
-            $currentUser->id_no ?? null,
-            $termId
+            instructor: $instructorName !== '' ? $instructorName : null,
+            instructorId: $currentUser->id_no ?? null,
+            termId: $termId
         );
 
         // Optional raw scores
@@ -67,17 +67,26 @@ class ReportEvaluationController extends Controller
         $instructorId = $request->query('instructor_id');
         $subjectId = $request->query('subject_id');
         $courseCode = $request->query('course_code');
+        $sectionCode = $request->query('section_code');
         $yearSection = $request->query('year_section');
         $termId = $request->query('term');  
 
-        $query = $this->buildEvaluationQuery($instructor, $instructorId, $courseCode, $yearSection, $termId);
+        $query = $this->buildEvaluationQuery(
+            instructor: $instructor,
+            instructorId: $instructorId,
+            courseCode: $courseCode,
+            yearSection: $yearSection,
+            termId: $termId,
+            sectionCode: $sectionCode,
+            subjectId: $subjectId
+        );
 
         $rows = (clone $query)
             ->select('ec.course_code')
             ->select('ec.course_description')
             ->select('ec.instructor')
             ->selectRaw("COALESCE(NULLIF(MAX(TRIM(ec.year_level)), ''), 'N/A') as year_level")
-            ->selectRaw("COALESCE(NULLIF(TRIM(ec.section_code), ''), 'N/A') as section_code")
+            ->selectRaw("COALESCE(NULLIF(TRIM(ec.section_code), ''), 'NO_SECTION') as section_code")
             ->selectRaw('COUNT(DISTINCT ses.student_id_number) as total_unique_students')
             ->selectRaw('COUNT(ses.id) as total_submissions')
             ->selectRaw('AVG(ses.rating_percentage) as average_score')
@@ -167,7 +176,15 @@ class ReportEvaluationController extends Controller
         ]);
     }
 
-    private function buildEvaluationQuery(?string $instructor = null, ?string $instructorId = null, ?string $courseCode = null, ?string $yearSection = null, ?string $termId = null)
+    private function buildEvaluationQuery(
+        ?string $instructor = null,
+        ?string $instructorId = null,
+        ?string $courseCode = null,
+        ?string $yearSection = null,
+        ?string $termId = null,
+        ?string $sectionCode = null,
+        ?string $subjectId = null
+    )
         {
             $query = DB::connection('lnu_poes')
                 ->table('enrollment_courses as ec')
@@ -184,25 +201,32 @@ class ReportEvaluationController extends Controller
                 $query->where('ec.course_code', $courseCode);
             }
 
-            // Apply section filtering - ONLY filter by section_code, NOT by year_level
-            if (!empty($yearSection)) {
-                $sectionCode = $this->extractSectionCode($yearSection);
-                
-                // Only apply section code filter if we have a section code
-                if ($sectionCode !== null) {
-                    $query->whereRaw("TRIM(ec.section_code) = ?", [$sectionCode]);
-                }
-                
-                // DO NOT filter by year_level since it's often null in the database
-                // The year level is usually embedded in the section_code (e.g., "AM11" contains "1" for 1st year)
+            // When available, use exact subject id from enrollment_courses to avoid cross-section mixing.
+            if (!empty($subjectId) && is_numeric($subjectId)) {
+                $query->where('ec.id', (int) $subjectId);
             }
 
-            // Match by instructor_id OR subject_id (to handle null instructor_id cases)
+            // Apply section filtering - ONLY filter by section_code, NOT by year_level
+            $resolvedSectionCode = trim((string) ($sectionCode ?? ''));
+            if ($resolvedSectionCode === '' && !empty($yearSection)) {
+                $resolvedSectionCode = trim((string) ($this->extractSectionCode($yearSection) ?? ''));
+            }
+
+            if ($resolvedSectionCode !== '') {
+                if (mb_strtoupper($resolvedSectionCode) === 'NO_SECTION') {
+                    $query->where(function ($q) {
+                        $q->whereNull('ec.section_code')
+                            ->orWhereRaw("TRIM(ec.section_code) = ''")
+                            ->orWhereRaw("UPPER(TRIM(ec.section_code)) = 'NO_SECTION'");
+                    });
+                } else {
+                    $query->whereRaw("TRIM(ec.section_code) = ?", [$resolvedSectionCode]);
+                }
+            }
+
+            // Strict ownership filtering by instructor id_no.
             if (!empty($instructorId)) {
-                $query->where(function ($q) use ($instructorId) {
-                    $q->where('ses.instructor_id', $instructorId)
-                    ->orWhereColumn('ses.subject_id', 'ec.id');
-                });
+                $query->where('ec.id_no', $instructorId);
             } else {
                 // Fall back to instructor name matching
                 $tokens = $this->extractInstructorTokens($instructor);

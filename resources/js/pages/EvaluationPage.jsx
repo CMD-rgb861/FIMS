@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import AppLayout from '../Layouts/AppLayout';
 import SefEvaluationModal from '../modals/SefEvaluationModal';
 import EvaluationResultModal from '../modals/EvaluationResultModal';
@@ -33,12 +33,17 @@ export default function EvaluationPage({
     const [selectedEvaluation, setSelectedEvaluation] = useState(null);
     const [isResultOpen, setIsResultOpen] = useState(false);
     const [selectedResult, setSelectedResult] = useState(null);
+    const [selectedSchoolYearFilter, setSelectedSchoolYearFilter] = useState(selectedSchoolYear);
     const [evaluationItems, setEvaluationItems] = useState(() => (
         evaluations.map((item) => ({
             ...item,
             evaluated: item.evaluated || evaluatedInstructors.includes(item.instructor),
         }))
     ));
+
+    useEffect(() => {
+        setSelectedSchoolYearFilter(selectedSchoolYear);
+    }, [selectedSchoolYear]);
     
     const openEvaluationModal = (item) => {
         if (item.evaluated || isEvaluationClosed) {
@@ -128,9 +133,12 @@ export default function EvaluationPage({
                                 <label className="block">
                                     <span className="sr-only">School Year</span>
                                     <select
-                                        name="sy"
-                                        defaultValue={selectedSchoolYear}
-                                        onChange={(event) => event.currentTarget.form?.submit()}
+                                        name="term"
+                                        value={selectedSchoolYearFilter}
+                                        onChange={(event) => {
+                                            setSelectedSchoolYearFilter(event.target.value);
+                                            event.currentTarget.form?.submit();
+                                        }}
                                         className="w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
                                     >
                                         {schoolYears.map((option) => (
@@ -142,7 +150,7 @@ export default function EvaluationPage({
                                 <label className="block">
                                     <span className="sr-only">Status</span>
                                     <select
-                                        name="term"
+                                        name="status"
                                         defaultValue={selectedTerm}
                                         onChange={(event) => event.currentTarget.form?.submit()}
                                         className="w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
