@@ -962,10 +962,11 @@ class ReportsController extends Controller
                 'ec.course_description',
                 'ec.section_code',
                 'ec.year_level',
-                'ec.school_year_id'
+                'ec.school_year_id',
+                'ec.id_no',
             )
             ->selectRaw('MIN(ec.id) as id')
-            ->groupBy('ec.course_code', 'ec.course_description', 'ec.section_code', 'ec.year_level', 'ec.school_year_id');
+            ->groupBy('ec.course_code', 'ec.course_description', 'ec.section_code', 'ec.year_level', 'ec.school_year_id', 'ec.id_no');
 
         // Filter by instructor ID number
         if (!empty($user->id_no)) {
@@ -1137,6 +1138,11 @@ class ReportsController extends Controller
                 $query->where('ec.section_code', $subject->section_code);
             }
             
+            // ✅ ADD THIS - Filter by instructor ID (same as getFacultyOverallSetRating)
+            if (!empty($subject->id_no)) {
+                $query->where('ec.id_no', $subject->id_no);
+            }
+            
             // Add school year filter if available
             if (!empty($subject->school_year_id)) {
                 $query->where('ec.school_year_id', $subject->school_year_id);
@@ -1145,10 +1151,15 @@ class ReportsController extends Controller
                 $query->where('ses.term_id', $termId);
             }
             
+            // Only include submitted evaluations with ratings
+            $query->whereNotNull('ses.rating_percentage');
+            
+            // Calculate average rating percentage
             $avgRating = $query->avg('ses.rating_percentage');
             
             return $avgRating !== null ? (float) $avgRating : null;
         } catch (\Exception $e) {
+            Log::error('Error getting subject SET rating: ' . $e->getMessage());
             return null;
         }
     }

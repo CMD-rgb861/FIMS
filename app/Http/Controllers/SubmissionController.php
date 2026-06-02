@@ -30,39 +30,66 @@ class SubmissionController extends Controller
                 $sectionCode = $this->extractSectionCode($validated['year_section']);
             }
             
-            // Build query similar to your working breakdown method
-            $query = DB::connection('lnu_poes')
+            // First, find the specific subject/enrollment_course record
+            $subjectQuery = DB::connection('lnu_poes')
                 ->table('enrollment_courses as ec')
-                ->join('student_evaluation_submissions as ses', 'ec.id', '=', 'ses.subject_id')
+                ->where('ec.course_code', $validated['course_code']);
+            
+            // Apply instructor filter to find the correct subject
+            if (!empty($validated['instructor_id'])) {
+                $subjectQuery->where('ec.id_no', $validated['instructor_id']);
+            }
+            
+            // Apply section filter
+            if ($sectionCode !== null) {
+                $subjectQuery->whereRaw("TRIM(ec.section_code) = ?", [$sectionCode]);
+            }
+            
+            // Apply term filter
+            if (!empty($validated['term_id']) && $validated['term_id'] !== 'all') {
+                $subjectQuery->where('ec.school_year_id', $validated['term_id']);
+            }
+            
+            // Get the specific subject/enrollment_course records
+            $subjects = $subjectQuery->get();
+
+            $subjectIds = $subjects->pluck('id')->toArray();
+            
+            if ($subjects->isEmpty()) {
+                Log::warning('No subject found for filters', [
+                    'course_code' => $validated['course_code'],
+                    'instructor_id' => $validated['instructor_id'] ?? null,
+                    'section_code' => $sectionCode,
+                    'term_id' => $validated['term_id'] ?? null
+                ]);
+                
+                return response()->json([
+                    'success' => true,
+                    'students' => [],
+                    'course_description' => $validated['course_description'] ?? null,
+                    'pagination' => [
+                        'current_page' => 1,
+                        'last_page' => 1,
+                        'per_page' => $perPage,
+                        'total' => 0,
+                        'from' => null,
+                        'to' => null,
+                    ],
+                ]);
+            }
+            
+            // Now fetch submissions for these specific subjects only
+            $query = DB::connection('lnu_poes')
+                ->table('student_evaluation_submissions as ses')
                 ->select(
                     'ses.id as submission_id',
                     'ses.student_id_number',
                     'ses.submitted_at',
                     'ses.rating_percentage',
-                    'ses.total_score',
-                    'ec.course_description',
+                    'ses.total_score'
                 )
-                ->where('ec.course_code', $validated['course_code'])
+                ->whereIn('ses.subject_id', $subjectIds)
                 ->whereNotNull('ses.submitted_at');
-
-            // Apply instructor filter (matches your working controller)
-            if (!empty($validated['instructor_id'])) {
-                $query->where(function ($q) use ($validated) {
-                    $q->where('ses.instructor_id', $validated['instructor_id'])
-                      ->orWhereColumn('ses.subject_id', 'ec.id');
-                });
-            }
-
-            // Apply section filter (matches your working controller)
-            if ($sectionCode !== null) {
-                $query->whereRaw("TRIM(ec.section_code) = ?", [$sectionCode]);
-            }
-
-            // Apply term filter
-            if (!empty($validated['term_id']) && $validated['term_id'] !== 'all') {
-                $query->where('ec.school_year_id', $validated['term_id']);
-                $query->where('ses.term_id', $validated['term_id']);
-            }
 
             $paginatedSubmissions = $query
                 ->orderBy('ses.submitted_at', 'desc')
@@ -79,7 +106,7 @@ class SubmissionController extends Controller
                 return response()->json([
                     'success' => true,
                     'students' => [],
-                    'course_description' => $validated['course_description'] ?? null,
+                    'course_description' => $subjects->first()->course_description ?? $validated['course_description'] ?? null,
                     'pagination' => [
                         'current_page' => $paginatedSubmissions->currentPage(),
                         'last_page' => $paginatedSubmissions->lastPage(),
@@ -93,13 +120,12 @@ class SubmissionController extends Controller
 
             // Get unique student ID numbers
             $studentIdNumbers = $submissions->pluck('student_id_number')
-                ->filter() // Remove null/empty values
+                ->filter()
                 ->unique()
                 ->values()
                 ->toArray();
             
             if (empty($studentIdNumbers)) {
-                // If no student ID numbers, return submissions without student names
                 $students = $submissions->map(function ($submission) {
                     return (object)[
                         'submission_id' => $submission->submission_id,
@@ -114,7 +140,7 @@ class SubmissionController extends Controller
                 return response()->json([
                     'success' => true,
                     'students' => $students,
-                    'course_description' => $submissions->first()->course_description ?? $validated['course_description'] ?? null,
+                    'course_description' => $subjects->first()->course_description ?? $validated['course_description'] ?? null,
                     'pagination' => [
                         'current_page' => $paginatedSubmissions->currentPage(),
                         'last_page' => $paginatedSubmissions->lastPage(),
@@ -147,21 +173,22 @@ class SubmissionController extends Controller
                 ];
             })->values();
 
-            // Log the count for debugging
+            // FIXED: Use $subjectIds instead of $subject->id
             Log::info('Submissions fetched', [
+                'subject_ids' => $subjectIds,
+                'total_subjects' => count($subjectIds),
                 'total_submissions' => $submissions->count(),
                 'unique_students' => $students->count(),
                 'course_code' => $validated['course_code'],
+                'instructor_id' => $validated['instructor_id'] ?? null,
                 'section_code' => $sectionCode,
                 'term_id' => $validated['term_id'] ?? null
             ]);
 
-            $courseDescription = $submissions->first()->course_description ?? $validated['course_description'] ?? null;
-
             return response()->json([
                 'success' => true,
                 'students' => $students,
-                'course_description' => $courseDescription,
+                'course_description' => $subjects->first()->course_description ?? $validated['course_description'] ?? null,
                 'pagination' => [
                     'current_page' => $paginatedSubmissions->currentPage(),
                     'last_page' => $paginatedSubmissions->lastPage(),
@@ -192,7 +219,6 @@ class SubmissionController extends Controller
             return null;
         }
 
-        // Clean the input
         $yearSection = trim($yearSection);
         
         // Extract section code from patterns like "1-AM11" or "Year 1-AM11" or "3-AI31"
