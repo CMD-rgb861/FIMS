@@ -116,31 +116,25 @@ class SubjectsController extends Controller
      */
     private function getUserSubjects($currentUser, $selectedTermId = null)
     {
-        $lastName = trim((string) ($currentUser->lastname ?? ''));
         $idNo = $currentUser->id_no ?? '';
-        
-        $query = PoesSubjects::query();
-        
-        // Build conditions efficiently
-        if ($idNo) {
-            $query->where(function ($q) use ($idNo) {
-                $q->where('id_number', $idNo)
-                ->orWhere('id_no', $idNo);
-            });
-        } elseif ($lastName !== '') {
-            $query->whereRaw('LOWER(TRIM(instructor)) LIKE ?', ['%' . mb_strtolower($lastName) . '%']);
-        } else {
-            // If no id_no and no last name, return empty result
+
+        // If no ID number, return empty pagination result
+        if (!$idNo) {
             return PoesSubjects::query()->whereRaw('1 = 0')->paginate(10);
         }
-        
+
+        $query = PoesSubjects::query();
+
+        $query->where(function ($q) use ($idNo) {
+            $q->where('id_no', $idNo);
+        });
+
         // Apply term filter using ID
         if ($selectedTermId && $selectedTermId !== 'all') {
             $query->where('school_year_id', $selectedTermId);
         }
-        
+
         // Group by unique subject combination
-        // This selects MIN(id) to get a representative row for each group
         $query->select(
             'course_code',
             'school_year_id',
@@ -158,8 +152,7 @@ class SubjectsController extends Controller
         ->groupBy('course_code', 'section_code', 'school_year_id')
         ->orderByRaw('CAST(school_year_id AS UNSIGNED) DESC')
         ->orderBy('course_code');
-        
-        // Order and paginate
+
         return $query->paginate(10);
     }
     

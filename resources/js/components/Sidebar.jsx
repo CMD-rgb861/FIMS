@@ -73,7 +73,7 @@ export default function Sidebar({
                     <span className="text-sm font-medium">Subjects</span>
                 </a>
 
-                {resolvedCanAccessEvaluation ? (
+                {/* {resolvedCanAccessEvaluation ? (
                     <a href={evaluationUrl} className={navClass('evaluation')}>
                         <span className={iconClass('evaluation')}>
                             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
@@ -87,9 +87,9 @@ export default function Sidebar({
                             <span className="ml-auto inline-flex h-2.5 w-2.5 rounded-full bg-red-500" aria-label="Pending evaluations" title="Pending evaluations" />
                         ) : null}
                     </a>
-                ) : null}
+                ) : null} */}
 
-                {resolvedCanAccessEvaluation ? (
+                {/* {resolvedCanAccessEvaluation ? (
                     <a href={gradesUrl} className={navClass('grades')}>
                         <span className={iconClass('grades')}>
                             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
@@ -103,7 +103,7 @@ export default function Sidebar({
                         </span>
                         <span className="text-sm font-medium">Grades</span>
                     </a>
-                ) : null}
+                ) : null} */}
 
                 <a href={reportsUrl} className={navClass('reports')}>
                     <span className={iconClass('reports')}>
@@ -117,7 +117,7 @@ export default function Sidebar({
                     <span className="text-sm font-medium">Evaluation Reports</span>
                 </a>
 
-                <a href={profileUrl} className={navClass('profile')}>
+                {/* <a href={profileUrl} className={navClass('profile')}>
                     <span className={iconClass('profile')}>
                         <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
                             <path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Z" />
@@ -125,7 +125,7 @@ export default function Sidebar({
                         </svg>
                     </span>
                     <span className="text-sm font-medium">My Profile</span>
-                </a>
+                </a> */}
 
                 <div className="my-2 border-t border-slate-200" />
 

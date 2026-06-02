@@ -532,7 +532,7 @@ class ReportsController extends Controller
                 'lastname',
                 'college_id',
                 'unit_id'
-            );
+            )->orderBy('lastname')->orderBy('firstname');
 
         // Role filtering
         if ($user->isAdmin()) {
@@ -869,6 +869,12 @@ class ReportsController extends Controller
             ->count();
         
         $averageRating = $this->getUserSefAverageRating($currentUser->id, $termId);
+
+        $averageSetRating = $this->getFacultyOverallSetRating(
+            $currentUser->id_no,
+            trim(($currentUser->firstname ?? '') . ' ' . ($currentUser->lastname ?? '')),
+            $termId
+        );
         
         $passedGradesCount = UnitHeadGrade::query()
             ->where('user_id', $currentUser->id)
@@ -902,6 +908,8 @@ class ReportsController extends Controller
             ->get()
             ->toArray();
 
+        
+
         $reportsProps = $this->commonInertiaProps($currentUser, [
             'reportSummary' => [
                 [
@@ -915,9 +923,11 @@ class ReportsController extends Controller
                     'helper' => 'Total subjects handled.',
                 ],
                 [
-                    'label' => 'Average Rating',
-                    'value' => $averageRating . '%',
-                    'helper' => 'Average score across all evaluations.',
+                    'label' => 'Average SET Rating',
+                    'value' => $averageSetRating !== null
+                        ? number_format($averageSetRating, 2) . '%'
+                        : 'N/A',
+                    'helper' => 'Average SET score across all subject evaluations.',
                 ],
                 [
                     'label' => 'Posted Grades',
