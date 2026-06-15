@@ -6,6 +6,7 @@ use App\Models\Poes\PoesEvalAnswers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 class AnswerController extends Controller
 {
@@ -48,6 +49,7 @@ class AnswerController extends Controller
                     'a.updated_at as answer_updated_at'
                 ])
                 ->get();
+                
             if ($result->isEmpty()) {
                 return response()->json([
                     'success' => false,
@@ -109,11 +111,139 @@ class AnswerController extends Controller
     }
     
     /**
+     * Get answers for multiple submissions in batch (FIXED)
+     * POST /answers/batch
+     */
+    public function getBatchAnswers(Request $request)
+    {
+        $validated = $request->validate([
+            'submission_ids' => 'required|array',
+            'submission_ids.*' => 'integer', // Removed exists validation to avoid errors
+            'term_id' => 'nullable|integer',
+        ]);
+
+        try {
+            $submissionIds = $validated['submission_ids'];
+            
+            if (empty($submissionIds)) {
+                return response()->json([
+                    'success' => true,
+                    'answers_by_submission' => []
+                ]);
+            }
+            
+            // Fetch all answers for all submission IDs in ONE query
+            $allAnswers = DB::connection('lnu_poes')
+                ->table('student_evaluation_submission_answers as a')
+                ->join('student_evaluation_submissions as s', 'a.submission_id', '=', 's.id')
+                ->whereIn('a.submission_id', $submissionIds)
+                ->select([
+                    'a.submission_id',
+                    'a.question_key',
+                    'a.score',
+                    's.comment',
+                    's.rating_percentage',
+                    's.total_score',
+                    's.max_score',
+                    's.submitted_at'
+                ])
+                ->get();
+            
+            // Get all unique question keys for batch text fetching
+            $questionKeys = $allAnswers->pluck('question_key')->unique()->values()->toArray();
+            $questionTexts = $this->getBulkQuestionTexts($questionKeys);
+            
+            // Initialize results for all submission IDs with default values
+            $results = [];
+            foreach ($submissionIds as $submissionId) {
+                $results[$submissionId] = [
+                    'ratings' => array_fill(0, 15, 4),
+                    'comment' => '',
+                    'rating_percentage' => null,
+                    'total_score' => null,
+                    'max_score' => null,
+                    'submitted_at' => null
+                ];
+            }
+            
+            // Group answers by submission_id and populate results
+            foreach ($allAnswers as $answer) {
+                $submissionId = $answer->submission_id;
+                
+                // Set submission data if not already set
+                if ($results[$submissionId]['comment'] === '') {
+                    $results[$submissionId]['comment'] = $answer->comment ?? '';
+                    $results[$submissionId]['rating_percentage'] = $answer->rating_percentage;
+                    $results[$submissionId]['total_score'] = $answer->total_score;
+                    $results[$submissionId]['max_score'] = $answer->max_score;
+                    $results[$submissionId]['submitted_at'] = $answer->submitted_at;
+                }
+                
+                // Map question to rating index
+                $ratingIndex = $this->getRatingIndex($answer->question_key);
+                if ($ratingIndex !== null && $answer->score >= 1 && $answer->score <= 5) {
+                    $results[$submissionId]['ratings'][$ratingIndex] = (int) $answer->score;
+                }
+            }
+            
+            return response()->json([
+                'success' => true,
+                'answers_by_submission' => $results
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Batch answers error: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'submission_ids' => $submissionIds ?? []
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch answers: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+    
+    /**
+     * Get rating index from question key
+     */
+    private function getRatingIndex($questionKey)
+    {
+        $questionMap = [
+            // Section A (s0_i0 to s0_i5) - 6 questions
+            's0_i0' => 0, 's0_i1' => 1, 's0_i2' => 2, 's0_i3' => 3, 's0_i4' => 4, 's0_i5' => 5,
+            // Section B (s1_i0 to s1_i4) - 5 questions
+            's1_i0' => 6, 's1_i1' => 7, 's1_i2' => 8, 's1_i3' => 9, 's1_i4' => 10,
+            // Section C (s2_i0 to s2_i3) - 4 questions
+            's2_i0' => 11, 's2_i1' => 12, 's2_i2' => 13, 's2_i3' => 14
+        ];
+        
+        return $questionMap[$questionKey] ?? null;
+    }
+    
+    /**
+     * Convert answers to ratings array (15 items)
+     */
+    private function convertAnswersToRatingsArray($answers)
+    {
+        $ratings = array_fill(0, 15, 4); // Default to 4
+        
+        foreach ($answers as $answer) {
+            $questionKey = $answer['question_key'];
+            $score = (int) $answer['score'];
+            
+            $ratingIndex = $this->getRatingIndex($questionKey);
+            if ($ratingIndex !== null && $score >= 1 && $score <= 5) {
+                $ratings[$ratingIndex] = $score;
+            }
+        }
+        
+        return $ratings;
+    }
+
+    /**
      * Update answers for a submission
      */
-    /**
- * Update answers for a submission
- */
     public function updateAnswers(Request $request, $submissionId)
     {
         $validated = $request->validate([
@@ -331,13 +461,10 @@ class AnswerController extends Controller
                     if (isset($dbQuestions[$key])) {
                         $text = $dbQuestions[$key]->question_text;
                         $result[$key] = $text;
-                        // Cache for 1 hour
                         Cache::put("question_text_{$key}", $text, 3600);
                     } else {
-                        // Use default mapping
                         $text = $this->getDefaultQuestionText($key);
                         $result[$key] = $text;
-                        // Cache default text for shorter time (10 minutes)
                         Cache::put("question_text_{$key}", $text, 600);
                     }
                 }
@@ -358,7 +485,6 @@ class AnswerController extends Controller
      */
     private function getDefaultQuestionText($questionKey)
     {
-        // Pre-defined question texts for your actual keys
         $questions = [
             // Section A
             's0_i0' => 'Comes to class on time.',
@@ -390,15 +516,12 @@ class AnswerController extends Controller
      */
     private function getQuestionOrder($questionKey)
     {
-        // Parse s0_i0 format
         if (preg_match('/s(\d+)_i(\d+)/', $questionKey, $matches)) {
             $section = (int) $matches[1];
             $index = (int) $matches[2];
-            // Return a combined order value
             return ($section * 100) + $index;
         }
         
-        // Fallback for legacy q1 format
         $num = (int) str_replace('q', '', $questionKey);
         return $num;
     }

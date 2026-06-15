@@ -167,6 +167,13 @@ export default function SefEvaluationModal({ isOpen, evaluation, submitUrl = '/e
         const safeCourseCode = String(evaluation.code ?? '').trim() || 'N/A';
         const safeCourseTitle = String(evaluation.title ?? '').trim() || 'N/A';
         const safeTerm = String(evaluation.term ?? '').trim() || 'N/A';
+        const instructorIdNo = evaluation.instructor_id_no ?? evaluation.id_no;
+        const evaluatedUserId = evaluation.evaluated_user_id ?? evaluation.user_id;
+
+        if (!instructorIdNo) {
+            setSubmitError('Unable to determine instructor ID. Please refresh and try again.');
+            return;
+        }
 
         setIsSubmitting(true);
         setSubmitError('');
@@ -183,6 +190,8 @@ export default function SefEvaluationModal({ isOpen, evaluation, submitUrl = '/e
                 credentials: 'same-origin',
                 body: JSON.stringify({
                     instructor: evaluation.instructor,
+                    instructor_id_no: Number.isInteger(instructorIdNo) ? instructorIdNo : parseInt(instructorIdNo, 10),
+                    evaluated_user_id: evaluatedUserId ? (Number.isInteger(evaluatedUserId) ? evaluatedUserId : parseInt(evaluatedUserId, 10)) : null,
                     course_code: safeCourseCode,
                     course_title: safeCourseTitle,
                     term: safeTerm,
@@ -281,7 +290,9 @@ export default function SefEvaluationModal({ isOpen, evaluation, submitUrl = '/e
                             </div>
                             <div>
                                 <p className="text-[10px] text-slate-500 sm:text-[11px]">College/Department</p>
-                                <p className="mt-0.5 pb-1 text-xs font-bold leading-tight text-slate-900 sm:text-sm">Masteral - Master in Information Technology</p>
+                                <p className="mt-0.5 pb-1 text-xs font-bold leading-tight text-slate-900 sm:text-sm">
+                                    {evaluation.college || 'N/A'} {evaluation.program ? `- ${evaluation.program}` : ''}
+                                </p>
                             </div>
                             <div>
                                 <p className="text-[10px] text-slate-500 sm:text-[11px]">Course Code/Title</p>

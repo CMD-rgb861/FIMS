@@ -13,6 +13,9 @@ use App\Http\Controllers\UnitHeadGradeController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\SubmissionController;
 use App\Http\Controllers\AnswerController; 
+use App\Http\Controllers\Forms\SupervisorEvaluationPDF;
+use App\Http\Controllers\Forms\StudentEvaluationPDF;
+use App\Http\Controllers\Forms\BatchPDFController;
 
 Route::get('/', function () {
     return redirect()->route('login');
@@ -30,10 +33,25 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/reports/faculty/{instructor}', [ReportsController::class, 'faculty'])->name('reports.faculty');
     Route::get('/reports/faculty/{instructor}/breakdown', [ReportEvaluationController::class, 'breakdown'])->name('reports.faculty.breakdown');
     Route::get('/reports/faculty/subject/{instructor}/{course_code}', [ReportsController::class, 'facultySubjectDetail'])->name('reports.faculty.subject');
+
+    // PDF routes
+    Route::get('/supervisor-evaluation/pdf/{id}', [SupervisorEvaluationPDF::class, 'generate'])->name('supervisor.evaluation.pdf');
+    Route::post('/student-evaluation/pdf/generate', [StudentEvaluationPDF::class, 'generate'])->name('student.evaluation.pdf.generate');
+    Route::post('/student-evaluation/pdf/batch-generate', [BatchPDFController::class, 'generateBatch'])->name('student.evaluation.pdf.batch-generate');
     
+    // SEF routes (Supervisor Evaluation)
+    Route::get('/sef/faculty/{facultyId}/reports', [SupervisorEvaluationPDF::class, 'getFacultySefData'])->name('sef.faculty.reports');
+    Route::post('/sef/pdf/generate', [SupervisorEvaluationPDF::class, 'generate'])->name('sef.pdf.generate');
+    Route::post('/sef/batch-reports', [SupervisorEvaluationPDF::class, 'batchReports'])->name('sef.batch-reports');
+    
+    // PDF display (single route for all PDFs)
+    Route::get('/pdf/display/{filename}', [StudentEvaluationPDF::class, 'display'])->name('pdf.display');
+    
+    // Submission and Answer routes
     Route::get('/submissions', [SubmissionController::class, 'getSubmissions']);
     Route::get('/answers/{submissionId}', [AnswerController::class, 'getAnswers']);
     Route::put('/answers/{submissionId}', [AnswerController::class, 'updateAnswers']);
+    Route::post('/answers/batch', [AnswerController::class, 'getBatchAnswers'])->name('answers.batch');
 
     Route::get('/my-profile', [AppProfileController::class, 'edit'])->name('my-profile.edit');
     Route::put('/my-profile', [AppProfileController::class, 'update'])->name('my-profile.update');

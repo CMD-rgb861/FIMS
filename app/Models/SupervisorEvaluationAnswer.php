@@ -16,6 +16,13 @@ class SupervisorEvaluationAnswer extends Model
         'score',
     ];
 
+    protected function casts(): array
+    {
+        return [
+            'score' => 'integer',
+        ];
+    }
+
     public function submission(): BelongsTo
     {
         return $this->belongsTo(SupervisorEvaluationSubmission::class, 'submission_id');
@@ -23,6 +30,6 @@ class SupervisorEvaluationAnswer extends Model
 
     public function question(): BelongsTo
     {
-        return $this->belongsTo(SefQuestion::class, 'question_code', 'code');
+        return $this->belongsTo(SefQuestion::class, 'question_key', 'code');
     }
 }

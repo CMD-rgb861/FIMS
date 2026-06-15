@@ -56,6 +56,44 @@ export default function EvaluationResultModal({ isOpen, result, onClose }) {
         }));
     }, [result]);
 
+    const handlePrintPDF = async () => {
+        try {
+            // Get CSRF token from meta tag
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            
+            // Make API call to your Laravel controller
+            const response = await fetch(`/supervisor-evaluation/pdf/${result.id}`, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/pdf',
+                    'X-CSRF-TOKEN': csrfToken || '',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+            });
+
+            if (response.ok) {
+                // Get the PDF blob
+                const blob = await response.blob();
+                
+                // Create a URL for the blob
+                const url = window.URL.createObjectURL(blob);
+                
+                // Open PDF in new tab
+                window.open(url, '_blank');
+                
+                // Clean up the URL object after a delay
+                setTimeout(() => window.URL.revokeObjectURL(url), 100);
+            } else {
+                const errorText = await response.text();
+                console.error('Failed to generate PDF:', errorText);
+                alert('Failed to generate PDF. Please try again.');
+            }
+        } catch (error) {
+            console.error('Error generating PDF:', error);
+            alert('An error occurred while generating the PDF.');
+        }
+    };
+
     if (!isOpen || !result) {
         return null;
     }
@@ -106,14 +144,23 @@ export default function EvaluationResultModal({ isOpen, result, onClose }) {
                             </table>
                         </div>
                     ))}
-
                 </div>
 
-                <div className="flex justify-end border-t border-slate-200 px-4 py-3 sm:px-5">
+                <div className="flex justify-end gap-2 border-t border-slate-200 px-4 py-3 sm:px-5">
+                    {/* <button
+                        type="button"
+                        onClick={handlePrintPDF}
+                        className="inline-flex items-center rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                    >
+                        <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                        </svg>
+                        Print PDF
+                    </button> */}
                     <button
                         type="button"
                         onClick={onClose}
-                        className="inline-flex items-center rounded-md bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-300"
+                        className="inline-flex items-center rounded-md bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
                     >
                         Close
                     </button>

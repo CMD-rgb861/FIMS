@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import AppLayout from '../Layouts/AppLayout';
-import { isFacultyRole } from '../utils/role';
-import { router } from '@inertiajs/react';
+import { isAdminRole, isDeanRole, isFacultyRole } from '../utils/role';
+import { router, Link } from '@inertiajs/react'; // Added Link
+import SefPrintButtonModal from '../modals/SefPrintButtonModal';
 
 export default function ReportsPage({
     appName = 'FIMS',
@@ -20,8 +21,15 @@ export default function ReportsPage({
     recentReports = { data: [] },
     schoolYears = [],
     selectedSchoolYear = '',
+    units = [],
+    selectedUnit = '',
+    facultyListAll = [],
 }) {
     const isFaculty = useMemo(() => isFacultyRole(user?.role), [user?.role]);
+    const isAdmin = useMemo(() => user?.isAdmin === true || isAdminRole(user?.role), [user?.isAdmin, user?.role]);
+    const isDean = useMemo(() => user?.isDean === true || isDeanRole(user?.role), [user?.isDean, user?.role]);
+    const canFilterByUnit = isAdmin || isDean;
+    const [isSefModalOpen, setIsSefModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [currentPage, setCurrentPage] = useState(facultyList.current_page || 1);
@@ -30,6 +38,8 @@ export default function ReportsPage({
     // Refs to track mounted state and prevent duplicate requests
     const isMountedRef = useRef(true);
     const searchTimeoutRef = useRef(null);
+    const hasMountedSearchRef = useRef(false);
+    const suppressSearchEffectRef = useRef(false);
     const isNavigatingRef = useRef(false);
     const lastRequestIdRef = useRef(0);
 
@@ -71,6 +81,7 @@ export default function ReportsPage({
         if (params.faculty_page) urlParams.append('faculty_page', params.faculty_page.toString());
         if (params.faculty_search) urlParams.append('faculty_search', params.faculty_search);
         if (params.faculty_per_page) urlParams.append('faculty_per_page', params.faculty_per_page.toString());
+        if (params.unit_filter) urlParams.append('unit_filter', params.unit_filter.toString());
         
         const url = `/reports${urlParams.toString() ? `?${urlParams.toString()}` : ''}`;
         
@@ -112,6 +123,8 @@ export default function ReportsPage({
             clearTimeout(searchTimeoutRef.current);
             searchTimeoutRef.current = null;
         }
+
+        suppressSearchEffectRef.current = true;
         
         // Reset states
         setSearchQuery('');
@@ -121,11 +134,35 @@ export default function ReportsPage({
             faculty_page: 1,
             faculty_search: '',
             faculty_per_page: facultyList.per_page,
+            unit_filter: selectedUnit,
         }, {
             preserveState: false,
             replace: true
         });
-    }, [facultyList.per_page, navigateToReports]);
+    }, [facultyList.per_page, selectedUnit, navigateToReports]);
+
+    const handleUnitChange = useCallback((event) => {
+        const newUnit = event.target.value;
+
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+            searchTimeoutRef.current = null;
+        }
+
+        suppressSearchEffectRef.current = true;
+        setSearchQuery('');
+
+        navigateToReports({
+            term: selectedSchoolYear,
+            faculty_page: 1,
+            faculty_search: '',
+            faculty_per_page: facultyList.per_page,
+            unit_filter: newUnit,
+        }, {
+            preserveState: false,
+            replace: true,
+        });
+    }, [facultyList.per_page, selectedSchoolYear, navigateToReports]);
 
     // Handle search with proper debounce
     const debouncedSearch = useCallback(() => {
@@ -141,24 +178,35 @@ export default function ReportsPage({
                 faculty_page: 1,
                 faculty_search: searchQuery,
                 faculty_per_page: facultyList.per_page,
+                unit_filter: selectedUnit,
             }, {
                 preserveState: true,
                 preserveScroll: true,
             });
         }, 500);
-    }, [searchQuery, selectedSchoolYear, facultyList.per_page, navigateToReports]);
+    }, [searchQuery, selectedSchoolYear, selectedUnit, facultyList.per_page, navigateToReports]);
 
     useEffect(() => {
+        if (!hasMountedSearchRef.current) {
+            hasMountedSearchRef.current = true;
+            return;
+        }
+
+        if (suppressSearchEffectRef.current) {
+            suppressSearchEffectRef.current = false;
+            return;
+        }
+
         if (searchQuery !== undefined) {
             debouncedSearch();
         }
-        
+
         return () => {
             if (searchTimeoutRef.current) {
                 clearTimeout(searchTimeoutRef.current);
             }
         };
-    }, [searchQuery, debouncedSearch]);
+    }, [searchQuery]);
 
     // Handle page change
     const handlePageChange = useCallback((newPage) => {
@@ -172,11 +220,12 @@ export default function ReportsPage({
             faculty_page: newPage,
             faculty_search: searchQuery,
             faculty_per_page: facultyList.per_page,
+                unit_filter: selectedUnit,
         }, {
             preserveState: true,
             preserveScroll: true,
         });
-    }, [selectedSchoolYear, searchQuery, currentPage, facultyList.per_page, facultyList.last_page, navigateToReports]);
+    }, [selectedSchoolYear, searchQuery, selectedUnit, currentPage, facultyList.per_page, facultyList.last_page, navigateToReports]);
 
     // Handle page size change
     const handlePageSizeChange = useCallback((e) => {
@@ -187,11 +236,12 @@ export default function ReportsPage({
             faculty_page: 1,
             faculty_search: searchQuery,
             faculty_per_page: newSize,
+                unit_filter: selectedUnit,
         }, {
             preserveState: true,
             preserveScroll: true,
         });
-    }, [selectedSchoolYear, searchQuery, navigateToReports]);
+    }, [selectedSchoolYear, searchQuery, selectedUnit, navigateToReports]);
 
     // Handle go to page
     const handleGotoPage = useCallback((e) => {
@@ -514,150 +564,205 @@ export default function ReportsPage({
             csrfToken={csrfToken}
             hasPendingEvaluations={hasPendingEvaluations}
         >
-            <main className="flex-1 p-6">
-                {!isFaculty && (
-                    <div className="mb-6">
-                        <h1 className="text-2xl font-semibold tracking-tight">Evaluation</h1>
-                        <p className="mt-1 text-sm text-slate-500">Faculty evaluation list.</p>
+            <main className="flex-1 overflow-y-auto">
+                {/* Breadcrumbs - same style as EvaluationPage */}
+                <div className="h-16 bg-white border-b border-slate-200 flex items-center px-6">
+                    <div className="text-sm text-slate-500 flex items-center gap-2">
+                        <Link href={dashboardUrl} className="hover:text-slate-700">Home</Link>
+                        <span className="text-slate-300">›</span>
+                        <span className="text-slate-700 font-medium">Reports</span>
+                    </div>
+                </div>
 
-                        <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-                            <div className="w-full xl:flex-1">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    <label className="block">
-                                        <span className="sr-only">School Year</span>
-                                        <select
-                                            value={selectedSchoolYear ? String(selectedSchoolYear) : ''}
-                                            onChange={handleSchoolYearChange}
-                                            className="w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
-                                        >
-                                            {schoolYears.length > 0 ? (
-                                                schoolYears.map((option) => (
-                                                    <option key={option.value} value={option.value}>{option.label}</option>
-                                                ))
-                                            ) : (
-                                                <option value="">No school years available</option>
-                                            )}
-                                        </select>
-                                    </label>
+                {/* Main content area with padding */}
+                <div className="p-6">
+                    {!isFaculty && (
+                        <div className="mb-6">
+                            <h1 className="text-2xl font-semibold tracking-tight">Evaluation</h1>
+                            <p className="mt-1 text-sm text-slate-500">Faculty evaluation list.</p>
 
-                                    <div className="relative">
-                                        <input
-                                            type="text"
-                                            placeholder="Search by name or ID..."
-                                            value={searchQuery}
-                                            onChange={(e) => setSearchQuery(e.target.value)}
-                                            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 pl-9 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
-                                        />
-                                        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                        </svg>
+                            <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+                                <div className="w-full xl:flex-1">
+                                    <div className={`grid grid-cols-1 gap-3 ${canFilterByUnit ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+                                        <label className="block">
+                                            <span className="sr-only">School Year</span>
+                                            <select
+                                                value={selectedSchoolYear ? String(selectedSchoolYear) : ''}
+                                                onChange={handleSchoolYearChange}
+                                                className="w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                                            >
+                                                {schoolYears.length > 0 ? (
+                                                    schoolYears.map((option) => (
+                                                        <option key={option.value} value={option.value}>{option.label}</option>
+                                                    ))
+                                                ) : (
+                                                    <option value="">No school years available</option>
+                                                )}
+                                            </select>
+                                        </label>
+
+                                        {canFilterByUnit && (
+                                            <label className="block">
+                                                <span className="sr-only">Unit</span>
+                                                <select
+                                                    value={selectedUnit ? String(selectedUnit) : ''}
+                                                    onChange={handleUnitChange}
+                                                    className="w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                                                >
+                                                    <option value="">All Units</option>
+                                                    {units.length > 0 ? (
+                                                        units.map((option) => (
+                                                            <option key={option.id} value={option.id}>{option.name}</option>
+                                                        ))
+                                                    ) : (
+                                                        <option value="">No units available</option>
+                                                    )}
+                                                </select>
+                                            </label>
+                                        )}
+
+                                        <div className="flex gap-3">
+                                            <div className="relative flex-1">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Search by name or ID..."
+                                                    value={searchQuery}
+                                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 pl-9 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                                                />
+                                                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                                </svg>
+                                            </div>
+                                            
+                                            <button
+                                                onClick={() => setIsSefModalOpen(true)}
+                                                className="inline-flex items-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+                                            >
+                                                <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                                </svg>
+                                                Print Selected SEF
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            <div className="flex shrink-0 xl:pt-1">
-                                <span className="inline-flex items-center justify-center rounded-md bg-slate-100 px-3 py-1.5 text-xs font-semibold whitespace-nowrap text-slate-700">
-                                    {selectedSchoolYearLabel}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {isFaculty ? (
-                    <section>
-                        <div className="mb-6">
-                            <h2 className="text-lg font-semibold text-slate-900">Recent Evaluations</h2>
-                            <p className="mt-1 text-sm text-slate-500">Your submitted evaluation submissions.</p>
-                        </div>
-                        <div className="space-y-3">
-                            {recentReportsItems}
-                        </div>
-                    </section>
-                ) : (
-                    <section>
-                        <div className="mb-6">
-                            <h2 className="text-base font-semibold text-slate-900">All Faculty</h2>
-                            <p className="mt-1 text-sm text-slate-500">Ratings for: <span className="font-medium">{selectedSchoolYearLabel}</span></p>
-                        </div>
-                        
-                        <div className="relative">
-                            {isLoading && (
-                                <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg">
-                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                                <div className="flex shrink-0 xl:pt-1">
+                                    <span className="inline-flex items-center justify-center rounded-md bg-slate-100 px-3 py-1.5 text-xs font-semibold whitespace-nowrap text-slate-700">
+                                        {selectedSchoolYearLabel}
+                                    </span>
                                 </div>
-                            )}
+                            </div>
+                        </div>
+                    )}
+
+                    {isFaculty ? (
+                        <section>
+                            <div className="mb-6">
+                                <h2 className="text-lg font-semibold text-slate-900">Recent Evaluations</h2>
+                                <p className="mt-1 text-sm text-slate-500">Your submitted evaluation submissions.</p>
+                            </div>
+                            <div className="space-y-3">
+                                {recentReportsItems}
+                            </div>
+                        </section>
+                    ) : (
+                        <section>
+                            <div className="mb-6">
+                                <h2 className="text-base font-semibold text-slate-900">All Faculty</h2>
+                                <p className="mt-1 text-sm text-slate-500">Ratings for: <span className="font-medium">{selectedSchoolYearLabel}</span></p>
+                            </div>
                             
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {facultyList.data && facultyList.data.map((faculty) => (
-                                    <a
-                                        key={faculty.employee_id_no}
-                                        href={faculty.detail_url}
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            router.visit(faculty.detail_url, {
-                                                preserveState: false,
-                                                replace: true,
-                                            });
-                                        }}
-                                        className="group block rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:border-blue-500 hover:shadow-md hover:bg-slate-50"
-                                    >
-                                        <div className="flex items-start gap-3 mb-4">
-                                            <div className="flex-shrink-0">
-                                                <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white flex items-center justify-center text-xs font-bold shadow-sm">
-                                                    {faculty.initials}
+                            <div className="relative">
+                                {isLoading && (
+                                    <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg">
+                                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                                    </div>
+                                )}
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {facultyList.data && facultyList.data.map((faculty) => (
+                                        <a
+                                            key={faculty.employee_id_no}
+                                            href={faculty.detail_url}
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                router.visit(faculty.detail_url, {
+                                                    preserveState: false,
+                                                    replace: true,
+                                                });
+                                            }}
+                                            className="group block rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:border-blue-500 hover:shadow-md hover:bg-slate-50"
+                                        >
+                                            <div className="flex items-start gap-3 mb-4">
+                                                <div className="flex-shrink-0">
+                                                    <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white flex items-center justify-center text-xs font-bold shadow-sm">
+                                                        {faculty.initials}
+                                                    </div>
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <h3 className="text-sm font-semibold text-slate-900 group-hover:text-blue-600 transition line-clamp-2">
+                                                        {faculty.instructor}
+                                                    </h3>
+                                                    <p className="text-xs text-slate-500 mt-0.5">
+                                                        ID: <span className="font-medium">{faculty.employee_id_no}</span>
+                                                    </p>
                                                 </div>
                                             </div>
-                                            <div className="min-w-0 flex-1">
-                                                <h3 className="text-sm font-semibold text-slate-900 group-hover:text-blue-600 transition line-clamp-2">
-                                                    {faculty.instructor}
-                                                </h3>
-                                                <p className="text-xs text-slate-500 mt-0.5">
-                                                    ID: <span className="font-medium">{faculty.employee_id_no}</span>
-                                                </p>
+                                            <div className="mb-3 h-px bg-gradient-to-r from-slate-200 to-transparent"></div>
+                                            <div className="space-y-2">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-xs font-medium text-slate-600">Overall SET</span>
+                                                    <span className={`text-xs font-semibold ${
+                                                        faculty.overall_set_rating !== null
+                                                            ? 'text-blue-600'
+                                                            : 'text-slate-400'
+                                                    }`}>
+                                                        {faculty.overall_set_rating !== null ? `${faculty.overall_set_rating.toFixed(2)}%` : '—'}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-xs font-medium text-slate-600">Overall SEF</span>
+                                                    <span className={`text-xs font-semibold ${
+                                                        faculty.overall_sef_rating !== null
+                                                            ? 'text-emerald-600'
+                                                            : 'text-slate-400'
+                                                    }`}>
+                                                        {faculty.overall_sef_rating !== null ? `${faculty.overall_sef_rating.toFixed(2)}%` : '—'}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-xs font-medium text-slate-600">Subjects</span>
+                                                    <span className="text-xs font-semibold text-slate-700">{faculty.subjects_count}</span>
+                                                </div>
                                             </div>
-                                        </div>
-                                        <div className="mb-3 h-px bg-gradient-to-r from-slate-200 to-transparent"></div>
-                                        <div className="space-y-2">
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-xs font-medium text-slate-600">Overall SET</span>
-                                                <span className={`text-xs font-semibold ${
-                                                    faculty.overall_set_rating !== null
-                                                        ? 'text-blue-600'
-                                                        : 'text-slate-400'
-                                                }`}>
-                                                    {faculty.overall_set_rating !== null ? `${faculty.overall_set_rating}%` : '—'}
-                                                </span>
-                                            </div>
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-xs font-medium text-slate-600">Overall SEF</span>
-                                                <span className={`text-xs font-semibold ${
-                                                    faculty.overall_sef_rating !== null
-                                                        ? 'text-emerald-600'
-                                                        : 'text-slate-400'
-                                                }`}>
-                                                    {faculty.overall_sef_rating !== null ? `${faculty.overall_sef_rating}%` : '—'}
-                                                </span>
-                                            </div>
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-xs font-medium text-slate-600">Subjects</span>
-                                                <span className="text-xs font-semibold text-slate-700">{faculty.subjects_count}</span>
-                                            </div>
-                                        </div>
-                                    </a>
-                                ))}
-                            </div>
-                            
-                            {Pagination}
-                            
-                            {(!facultyList.data || facultyList.data.length === 0) && !isLoading && (
-                                <div className="text-center py-12">
-                                    <p className="text-slate-500">No faculty found matching your search.</p>
+                                        </a>
+                                    ))}
                                 </div>
-                            )}
-                        </div>
-                    </section>
-                )}
+                                
+                                {Pagination}
+                                
+                                {(!facultyList.data || facultyList.data.length === 0) && !isLoading && (
+                                    <div className="text-center py-12">
+                                        <p className="text-slate-500">No faculty found matching your search.</p>
+                                    </div>
+                                )}
+                            </div>
+                        </section>
+                    )}
+                </div>
+
+                {/* SEF Print Modal */}
+                <SefPrintButtonModal
+                    isOpen={isSefModalOpen}
+                    onClose={() => setIsSefModalOpen(false)}
+                    facultyList={facultyList.data || []}
+                    facultyListAll={facultyListAll || []}
+                    selectedSchoolYear={selectedSchoolYear}
+                    schoolYearLabel={selectedSchoolYearLabel}
+                />
+
             </main>
         </AppLayout>
     );

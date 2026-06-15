@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Traits\FacultyData;
 use App\Models\SupervisorEvaluationSubmission;
 use App\Models\UnitHeadGrade;
+use App\Models\User;
 use Inertia\Inertia;
 use Illuminate\Http\Request;
 
@@ -43,34 +44,33 @@ class DashboardController extends Controller
             ->values()
             ->all();
 
-        $submissionBaseQuery = SupervisorEvaluationSubmission::query();
+        $submissionBaseQuery = SupervisorEvaluationSubmission::query()->with('instructorUser');
         $gradeBaseQuery = UnitHeadGrade::query();
 
         if ($canAccessEvaluation) {
             $submissionBaseQuery->where('user_id', $currentUser->id);
             $gradeBaseQuery->where('user_id', $currentUser->id);
         } else {
-            if (!empty($nameCandidates)) {
-                $submissionBaseQuery->where(function ($query) use ($nameCandidates) {
-                    foreach ($nameCandidates as $name) {
-                        $query->orWhere('instructor', $name);
-                    }
-                });
+            if (!empty($currentUser?->id_no)) {
+                $submissionBaseQuery->where('instructor_id_no', $currentUser->id_no);
+            } else {
+                $submissionBaseQuery->where('id', 0);
+            }
 
+            if (!empty($nameCandidates)) {
                 $gradeBaseQuery->where(function ($query) use ($nameCandidates) {
                     foreach ($nameCandidates as $name) {
                         $query->orWhere('instructor', $name);
                     }
                 });
             } else {
-                $submissionBaseQuery->where('id', 0);
                 $gradeBaseQuery->where('id', 0);
             }
         }
 
         $totalInstructors = count($facultyEvaluations);
         $evaluatedInstructors = (clone $submissionBaseQuery)
-            ->pluck('instructor')
+            ->pluck('instructor_id_no')
             ->unique()
             ->values()
             ->all();
@@ -91,8 +91,17 @@ class DashboardController extends Controller
                     return (int) $score;
                 });
 
+                $instructorName = trim(collect([
+                    trim((string) ($submission->instructorUser?->firstname ?? '')),
+                    trim((string) ($submission->instructorUser?->middlename ?? '')),
+                    trim((string) ($submission->instructorUser?->lastname ?? '')),
+                    trim((string) ($submission->instructorUser?->extname ?? '')),
+                ])->filter()->implode(' '));
+
                 return [
-                    'instructor' => $submission->instructor,
+                    'instructor' => $instructorName !== ''
+                        ? $instructorName
+                        : (string) ($submission->instructor_id_no ?? 'Unknown Instructor'),
                     'course_code' => $submission->course_code,
                     'course_title' => $submission->course_title,
                     'rating_percentage' => round(($totalScore / 75) * 100, 2),
@@ -183,7 +192,6 @@ class DashboardController extends Controller
                 ],
             ],
             'recentEvaluations' => $recentEvaluations,
-            'hasPendingEvaluations' => $pendingCount > 0,
         ]);
 
         return Inertia::render('DashboardPage', $dashboardProps);

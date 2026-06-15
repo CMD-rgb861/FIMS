@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import AppLayout from '../Layouts/AppLayout';
-import { router } from '@inertiajs/react';
+import { router, Link } from '@inertiajs/react';
 import FacultyReportPageModal from '../modals/FacultyReportPageModal';
+import SetPrintButtonModal from '../modals/SetPrintButtonModal'; // Import the new modal
 
 const extractYearLevelFromSectionCode = (sectionCode) => {
     const digits = String(sectionCode ?? '').match(/\d/g) ?? [];
@@ -71,6 +72,8 @@ export default function FacultyReportPage({
     tableRows = [],
     schoolYears = [],
     selectedSchoolYear = '',
+    overallSetRating = null,
+    overallSefRating = null,
 }) {
     const [isSetModalOpen, setIsSetModalOpen] = useState(false);
     const [setBreakdownRows, setSetBreakdownRows] = useState([]);
@@ -79,17 +82,10 @@ export default function FacultyReportPage({
     const [isModalLoading, setIsModalLoading] = useState(false);
     const [modalError, setModalError] = useState('');
     const [selectedInstructorId, setSelectedInstructorId] = useState(null);
-
-    /**
-     * CRITICAL DEBUG POINT: Track current school year filter state
-     * Initialized from props (selectedSchoolYear from backend)
-     * Used to filter tableRows by matching school_year_id
-     */
     
+    // New state for print modal
+    const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
-    // Ensure the school year filter is initialized to the backend-provided
-    // `selectedSchoolYear` when available; otherwise default to the first
-    // available school year so the list is filtered immediately.
     const openSetModal = async (row) => {
         setModalError('');
         setSelectedCourseCode(row?.course_code ?? '');
@@ -99,9 +95,7 @@ export default function FacultyReportPage({
             rating: row?.sef_rating ?? null,
         });
 
-        // Store instructor ID for modal 2
         setSelectedInstructorId(row?.instructor_id);
-
         setIsSetModalOpen(true);
 
         if (!row?.breakdown_url) return;
@@ -109,7 +103,6 @@ export default function FacultyReportPage({
         try {
             setIsModalLoading(true);
 
-            // Add the current term to the URL
             const url = new URL(row.breakdown_url, window.location.origin);
             if (selectedSchoolYear) {
                 url.searchParams.set('term', selectedSchoolYear);
@@ -140,11 +133,6 @@ export default function FacultyReportPage({
         setSelectedInstructorId(null);
     };
 
-    /**
-     * CRITICAL DEBUG POINT: Handle school year dropdown change
-     * Updates currentSchoolYear state which triggers re-filter of tableRows
-     * Called when user changes school year dropdown
-     */
     const handleSchoolYearChange = (event) => {
         const newSchoolYear = event.target.value;
 
@@ -158,10 +146,8 @@ export default function FacultyReportPage({
         });
     };
 
-
     const filteredRows = tableRows;
     const selectedSchoolYearLabel = schoolYears.find((option) => String(option.value) === String(selectedSchoolYear))?.label ?? '';
-    
 
     const handlePageChange = (newPage) => {
         router.get(route('reports.faculty', {
@@ -170,6 +156,17 @@ export default function FacultyReportPage({
             page: newPage,
         }));
     };
+
+    // Prepare subjects data for print modal
+    const subjectsForPrint = tableRows.map(row => ({
+        id: row.id,
+        subject_id: row.subject_id,
+        course_code: row.course_code,
+        course_description: row.course_description,
+        year_section: normalizeYearSectionLabel(row.year_section),
+        term_id: row.school_year_id_value ?? selectedSchoolYear,
+        employee_name: row.employee_name,
+    }));
 
     return (
         <AppLayout
@@ -186,172 +183,214 @@ export default function FacultyReportPage({
             csrfToken={csrfToken}
             hasPendingEvaluations={hasPendingEvaluations}
         >
-            <main className="flex-1 p-6">
-                <div className="mb-6">
-                    <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-                        {facultyName} - Evaluation Details
-                    </h1>
-
-                    <p className="mt-1 text-sm text-slate-500">
-                        Faculty evaluation summary table.
-                    </p>
-
-                    <div className="mt-3 flex flex-wrap items-center gap-3">
-                        <a
-                            href={`${reportsUrl}?tab=evaluation`}
-                            onClick={(e) => {
-                                e.preventDefault();
-                                router.visit(`${reportsUrl}?tab=evaluation`);
-                            }}
-                            className="inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
-                        >
-                            Back
-                        </a>
+            <main className="flex-1 overflow-y-auto">
+                {/* Breadcrumbs - same style as EvaluationPage */}
+                <div className="h-16 bg-white border-b border-slate-200 flex items-center px-6">
+                    <div className="text-sm text-slate-500 flex items-center gap-2">
+                        <Link href={dashboardUrl} className="hover:text-slate-700">Home</Link>
+                        <span className="text-slate-300">›</span>
+                        <Link href={reportsUrl} className="hover:text-slate-700">Reports</Link>
+                        <span className="text-slate-300">›</span>
+                        <span className="text-slate-700">{facultyName || 'Faculty Details'}</span>
                     </div>
                 </div>
 
-                <div className="mt-6 flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-                    <div className="w-full xl:flex-1">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 max-w-3xl">
-                            <label className="block">
-                                <span className="sr-only">School Year</span>
+                {/* Main content area with padding */}
+                <div className="p-6">
+                    <div className="mb-6">
+                        <h1 className="mt-2 text-2xl font-semibold tracking-tight">
+                            {facultyName} - Evaluation Details
+                        </h1>
 
-                                {/**
-                                  * CRITICAL DEBUG POINT: School year filter dropdown
-                                  * Triggers handleSchoolYearChange when value changes
-                                  * currentSchoolYear is used in filteredRows logic
-                                  */}
-                                <select
-                                    value={selectedSchoolYear ? String(selectedSchoolYear) : ''}
-                                    onChange={handleSchoolYearChange}
-                                    className="w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
-                                >
-                                    {/* <option value="">All School Years</option> */}
-                                    {schoolYears.length > 0 ? (
-                                        schoolYears.map((option) => (
-                                            <option key={option.value} value={option.value}>{option.label}</option>
-                                        ))
-                                    ) : (
-                                        <option value="">No school years available</option>
-                                    )}
-                                </select>
-                            </label>
+                        <p className="mt-1 text-sm text-slate-500">
+                            Faculty evaluation summary table.
+                        </p>
+
+                        <div className="mt-3 flex flex-wrap gap-3">
+                            <div className="inline-flex items-center gap-2 rounded-md bg-slate-100 px-3 py-1.5">
+                                <span className="text-xs font-medium text-slate-600">Overall SET:</span>
+                                <span className={`text-xs font-semibold ${
+                                    overallSetRating !== null ? 'text-blue-600' : 'text-slate-400'
+                                }`}>
+                                    {overallSetRating !== null ? `${overallSetRating.toFixed(2)}%` : '—'}
+                                </span>
+                            </div>
+
+                            <div className="inline-flex items-center gap-2 rounded-md bg-slate-100 px-3 py-1.5">
+                                <span className="text-xs font-medium text-slate-600">Overall SEF:</span>
+                                <span className={`text-xs font-semibold ${
+                                    overallSefRating !== null ? 'text-emerald-600' : 'text-slate-400'
+                                }`}>
+                                    {overallSefRating !== null ? `${overallSefRating.toFixed(2)}%` : '—'}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap items-center gap-3">
+                            <a
+                                href={`${reportsUrl}?tab=evaluation`}
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    router.visit(`${reportsUrl}?tab=evaluation`);
+                                }}
+                                className="inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
+                            >
+                                Back
+                            </a>
+                            
+                            {/* Print Button */}
+                            <button
+                                type="button"
+                                onClick={() => setIsPrintModalOpen(true)}
+                                className="inline-flex items-center rounded-md bg-red-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-red-700"
+                            >
+                                <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                </svg>
+                                Print PDF
+                            </button>
                         </div>
                     </div>
 
-                    <div className="flex shrink-0 xl:pt-1">
-                        <span className="inline-flex items-center justify-center rounded-md bg-slate-100 px-3 py-1.5 text-xs font-semibold whitespace-nowrap text-slate-700">
-                            {/**
-                              * DEBUG POINT: Display selected school year label
-                              * Shows which school year is currently filtered
-                              */}
-                            {selectedSchoolYear
-                                ? schoolYears.find((option) => String(option.value) === String(selectedSchoolYear))?.label || 'All school years'
-                                : 'All school years'}
-                        </span>
+                    <div className="mt-6 flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                        <div className="w-full xl:flex-1">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 max-w-3xl">
+                                <label className="block">
+                                    <span className="sr-only">School Year</span>
+                                    <select
+                                        value={selectedSchoolYear ? String(selectedSchoolYear) : ''}
+                                        onChange={handleSchoolYearChange}
+                                        className="w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                                    >
+                                        {schoolYears.length > 0 ? (
+                                            schoolYears.map((option) => (
+                                                <option key={option.value} value={option.value}>{option.label}</option>
+                                            ))
+                                        ) : (
+                                            <option value="">No school years available</option>
+                                        )}
+                                    </select>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div className="flex shrink-0 xl:pt-1">
+                            <span className="inline-flex items-center justify-center rounded-md bg-slate-100 px-3 py-1.5 text-xs font-semibold whitespace-nowrap text-slate-700">
+                                {selectedSchoolYear
+                                    ? schoolYears.find((option) => String(option.value) === String(selectedSchoolYear))?.label || 'All school years'
+                                    : 'All school years'}
+                            </span>
+                        </div>
                     </div>
-                </div>
 
-                <section className="mt-4 rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto">
-                    <table className="min-w-full divide-y divide-slate-200 text-sm">
-                        <thead className="bg-slate-50">
-                            <tr>
-                                <th className="px-5 py-3 text-left font-semibold text-slate-600">
-                                    Course Code
-                                </th>
-                                <th className="px-5 py-3 text-left font-semibold text-slate-600">
-                                    Subject
-                                </th>
-                                <th className="px-5 py-3 text-left font-semibold text-slate-600">
-                                    Year/Section
-                                </th>
-                                <th className="px-5 py-3 text-left font-semibold text-slate-600">
-                                    Employee Name
-                                </th>
-                                <th className="px-5 py-3 text-left font-semibold text-slate-600">
-                                    Action
-                                </th>
-                            </tr>
-                        </thead>
+                    <section className="mt-4 rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto">
+                        <table className="min-w-full divide-y divide-slate-200 text-sm">
+                            <thead className="bg-slate-50">
+                                <tr>
+                                    <th className="px-5 py-3 text-left font-semibold text-slate-600">
+                                        Course Code
+                                    </th>
+                                    <th className="px-5 py-3 text-left font-semibold text-slate-600">
+                                        Subject
+                                    </th>
+                                    <th className="px-5 py-3 text-left font-semibold text-slate-600">
+                                        Year/Section
+                                    </th>
+                                    <th className="px-5 py-3 text-left font-semibold text-slate-600">
+                                        Employee Name
+                                    </th>
+                                    <th className="px-5 py-3 text-left font-semibold text-slate-600">
+                                        Action
+                                    </th>
+                                </tr>
+                            </thead>
 
-                        <tbody className="divide-y divide-slate-200 bg-white">
-                            {filteredRows.length > 0 ? (
-                                filteredRows.map((row) => (
-                                    <tr key={row.id}>
-                                        <td className="px-5 py-3 text-slate-700">
-                                            {row.course_code || '-'}
-                                        </td>
-
-                                        <td className="px-5 py-3 text-slate-900 font-medium">
-                                            {row.course_description || '-'}
-                                        </td>
-
-                                        <td className="px-5 py-3 text-slate-700">
-                                            {normalizeYearSectionLabel(row.year_section)}
-                                        </td>
-
-                                        <td className="px-5 py-3 text-slate-700">
-                                            {row.employee_name}
-                                        </td>
-
-                                        <td className="px-5 py-3">
-                                            <button
-                                                type="button"
-                                                onClick={() => openSetModal(row)}
-                                                className="inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
-                                            >
-                                                {row.action_label || 'Open'}
-                                            </button>
+                            <tbody className="divide-y divide-slate-200 bg-white">
+                                {filteredRows.length > 0 ? (
+                                    filteredRows.map((row) => (
+                                        <tr key={row.id}>
+                                            <td className="px-5 py-3 text-slate-700">
+                                                {row.course_code || '-'}
+                                            </td>
+                                            <td className="px-5 py-3 text-slate-900 font-medium">
+                                                {row.course_description || '-'}
+                                            </td>
+                                            <td className="px-5 py-3 text-slate-700">
+                                                {normalizeYearSectionLabel(row.year_section)}
+                                            </td>
+                                            <td className="px-5 py-3 text-slate-700">
+                                                {row.employee_name}
+                                            </td>
+                                            <td className="px-5 py-3">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openSetModal(row)}
+                                                    className="inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                                                >
+                                                    {row.action_label || 'Open'}
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td
+                                            colSpan={5}
+                                            className="px-5 py-8 text-center text-slate-500"
+                                        >
+                                            No evaluation records found for this faculty.
                                         </td>
                                     </tr>
-                                ))
-                            ) : (
-                                <tr>
-                                    <td
-                                        colSpan={5}
-                                        className="px-5 py-8 text-center text-slate-500"
-                                    >
-                                        No evaluation records found for this faculty.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </section>
+                                )}
+                            </tbody>
+                        </table>
+                    </section>
 
-                <div className="flex items-center justify-between mt-4">
-                    <button
-                        disabled={tablePagination?.current_page <= 1}
-                        onClick={() => handlePageChange((tablePagination?.current_page ?? 1) - 1)}
-                        className="px-3 py-1 text-sm bg-gray-200 rounded disabled:opacity-50"
-                    >
-                        Previous
-                    </button>
+                    <div className="flex items-center justify-between mt-4">
+                        <button
+                            disabled={tablePagination?.current_page <= 1}
+                            onClick={() => handlePageChange((tablePagination?.current_page ?? 1) - 1)}
+                            className="px-3 py-1 text-sm bg-gray-200 rounded disabled:opacity-50"
+                        >
+                            Previous
+                        </button>
 
-                    <span className="text-sm text-slate-600">
-                        Page {tablePagination?.current_page} of {tablePagination?.last_page}
-                    </span>
+                        <span className="text-sm text-slate-600">
+                            Page {tablePagination?.current_page} of {tablePagination?.last_page}
+                        </span>
 
-                    <button
-                        disabled={tablePagination?.current_page >= tablePagination?.last_page}
-                        onClick={() => handlePageChange((tablePagination?.current_page ?? 1) + 1)}
-                        className="px-3 py-1 text-sm bg-gray-200 rounded disabled:opacity-50"
-                    >
-                        Next
-                    </button>
+                        <button
+                            disabled={tablePagination?.current_page >= tablePagination?.last_page}
+                            onClick={() => handlePageChange((tablePagination?.current_page ?? 1) + 1)}
+                            className="px-3 py-1 text-sm bg-gray-200 rounded disabled:opacity-50"
+                        >
+                            Next
+                        </button>
+                    </div>
+
+                    <FacultyReportPageModal
+                        isOpen={isSetModalOpen}
+                        onClose={closeSetModal}
+                        setBreakdownRows={setBreakdownRows}
+                        selectedCourseCode={selectedCourseCode}
+                        selectedSefBreakdown={selectedSefBreakdown}
+                        isLoading={isModalLoading}
+                        errorMessage={modalError}
+                        instructorId={facultyIdNo}
+                        termId={selectedSchoolYear}
+                        facultyName={facultyName}  // Add this line
+                    />
+
+                    {/* Print Modal */}
+                    <SetPrintButtonModal
+                        isOpen={isPrintModalOpen}
+                        onClose={() => setIsPrintModalOpen(false)}
+                        subjects={subjectsForPrint}
+                        facultyName={facultyName}
+                        facultyIdNo={facultyIdNo}
+                        term={selectedSchoolYear}
+                    />
                 </div>
-
-                <FacultyReportPageModal
-                    isOpen={isSetModalOpen}
-                    onClose={closeSetModal}
-                    setBreakdownRows={setBreakdownRows}
-                    selectedCourseCode={selectedCourseCode}
-                    selectedSefBreakdown={selectedSefBreakdown}
-                    isLoading={isModalLoading}
-                    errorMessage={modalError}
-                    instructorId={facultyIdNo}
-                    termId={selectedSchoolYear}
-                />
             </main>
         </AppLayout>
     );

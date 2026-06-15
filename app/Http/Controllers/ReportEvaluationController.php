@@ -12,13 +12,13 @@ class ReportEvaluationController extends Controller
     public function index(Request $request)
     {
         $currentUser = $request->user();
+        $instructorId = $currentUser->id_no ?? null;
         $instructorName = trim((string) (($currentUser->firstname ?? '') . ' ' . ($currentUser->lastname ?? '')));
         $termId = $request->query('term');
 
-
         $query = $this->buildEvaluationQuery(
-            instructor: $instructorName !== '' ? $instructorName : null,
-            instructorId: $currentUser->id_no ?? null,
+            instructorId: $instructorId,
+            instructorName: $instructorName !== '' ? $instructorName : null,
             termId: $termId
         );
 
@@ -65,6 +65,7 @@ class ReportEvaluationController extends Controller
     public function breakdown(Request $request, string $instructor)
     {
         $instructorId = $request->query('instructor_id');
+        $instructorName = $instructor; // from URL parameter
         $subjectId = $request->query('subject_id');
         $courseCode = $request->query('course_code');
         $sectionCode = $request->query('section_code');
@@ -72,8 +73,8 @@ class ReportEvaluationController extends Controller
         $termId = $request->query('term');  
 
         $query = $this->buildEvaluationQuery(
-            instructor: $instructor,
             instructorId: $instructorId,
+            instructorName: $instructorName,
             courseCode: $courseCode,
             yearSection: $yearSection,
             termId: $termId,
@@ -177,68 +178,68 @@ class ReportEvaluationController extends Controller
     }
 
     private function buildEvaluationQuery(
-        ?string $instructor = null,
         ?string $instructorId = null,
+        ?string $instructorName = null,
         ?string $courseCode = null,
         ?string $yearSection = null,
         ?string $termId = null,
         ?string $sectionCode = null,
         ?string $subjectId = null
-    )
-        {
-            $query = DB::connection('lnu_poes')
-                ->table('enrollment_courses as ec')
-                ->join('student_evaluation_submissions as ses', 'ec.id', '=', 'ses.subject_id');
+    ) {
+        $query = DB::connection('lnu_poes')
+            ->table('enrollment_courses as ec')
+            ->join('student_evaluation_submissions as ses', 'ec.id', '=', 'ses.subject_id');
 
-            // Add term filter
-            if ($termId !== null && $termId !== '' && $termId !== 'all') {
-                $query->where('ec.school_year_id', $termId);
-                $query->where('ses.term_id', $termId);
-            }
-
-            // Apply course code filter
-            if (!empty($courseCode)) {
-                $query->where('ec.course_code', $courseCode);
-            }
-
-            // When available, use exact subject id from enrollment_courses to avoid cross-section mixing.
-            if (!empty($subjectId) && is_numeric($subjectId)) {
-                $query->where('ec.id', (int) $subjectId);
-            }
-
-            // Apply section filtering - ONLY filter by section_code, NOT by year_level
-            $resolvedSectionCode = trim((string) ($sectionCode ?? ''));
-            if ($resolvedSectionCode === '' && !empty($yearSection)) {
-                $resolvedSectionCode = trim((string) ($this->extractSectionCode($yearSection) ?? ''));
-            }
-
-            if ($resolvedSectionCode !== '') {
-                if (mb_strtoupper($resolvedSectionCode) === 'NO_SECTION') {
-                    $query->where(function ($q) {
-                        $q->whereNull('ec.section_code')
-                            ->orWhereRaw("TRIM(ec.section_code) = ''")
-                            ->orWhereRaw("UPPER(TRIM(ec.section_code)) = 'NO_SECTION'");
-                    });
-                } else {
-                    $query->whereRaw("TRIM(ec.section_code) = ?", [$resolvedSectionCode]);
-                }
-            }
-
-            // Strict ownership filtering by instructor id_no.
-            if (!empty($instructorId)) {
-                $query->where('ec.id_no', $instructorId);
-            } else {
-                // Fall back to instructor name matching
-                $tokens = $this->extractInstructorTokens($instructor);
-                if (!empty($tokens)) {
-                    foreach ($tokens as $token) {
-                        $query->where('ec.instructor', 'like', '%' . $token . '%');
-                    }
-                }
-            }
-
-            return $query;
+        // Add term filter
+        if ($termId !== null && $termId !== '' && $termId !== 'all') {
+            $query->where('ec.school_year_id', $termId);
+            $query->where('ses.term_id', $termId);
         }
+
+        // Apply course code filter
+        if (!empty($courseCode)) {
+            $query->where('ec.course_code', $courseCode);
+        }
+
+        // When available, use exact subject id from enrollment_courses to avoid cross-section mixing.
+        if (!empty($subjectId) && is_numeric($subjectId)) {
+            $query->where('ec.id', (int) $subjectId);
+        }
+
+        // Apply section filtering - ONLY filter by section_code, NOT by year_level
+        $resolvedSectionCode = trim((string) ($sectionCode ?? ''));
+        if ($resolvedSectionCode === '' && !empty($yearSection)) {
+            $resolvedSectionCode = trim((string) ($this->extractSectionCode($yearSection) ?? ''));
+        }
+
+        if ($resolvedSectionCode !== '') {
+            if (mb_strtoupper($resolvedSectionCode) === 'NO_SECTION') {
+                $query->where(function ($q) {
+                    $q->whereNull('ec.section_code')
+                        ->orWhereRaw("TRIM(ec.section_code) = ''")
+                        ->orWhereRaw("UPPER(TRIM(ec.section_code)) = 'NO_SECTION'");
+                });
+            } else {
+                $query->whereRaw("TRIM(ec.section_code) = ?", [$resolvedSectionCode]);
+            }
+        }
+
+        // PRIMARY FILTER: Use instructor id_no when available
+        if (!empty($instructorId)) {
+            $query->where('ec.id_no', $instructorId);
+        } 
+        // FALLBACK: Use instructor name matching only if id_no is not provided
+        elseif (!empty($instructorName)) {
+            $tokens = $this->extractInstructorTokens($instructorName);
+            if (!empty($tokens)) {
+                foreach ($tokens as $token) {
+                    $query->where('ec.instructor', 'like', '%' . $token . '%');
+                }
+            }
+        }
+
+        return $query;
+    }
 
     private function extractInstructorTokens(?string $instructor): array
     {

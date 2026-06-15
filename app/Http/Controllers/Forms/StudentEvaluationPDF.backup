@@ -1,0 +1,690 @@
+<?php
+// app\Http\Controllers\Forms\StudentEvaluationPDF.php
+namespace App\Http\Controllers\Forms;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use TCPDF;
+
+class StudentEvaluationPDF extends Controller
+{
+    
+    public function generate(Request $request)
+    {
+        // Get data from request with defaults
+        $facultyId = $request->faculty_id;
+        $facultyName = $request->faculty_name;
+        $term = $request->term;
+        $subjects = $request->subjects;
+        
+        // Get offset parameters from request (optional, with defaults)
+        $x_offset = $request->input('x_offset', 13);  // Horizontal offset from left margin (mm)
+        $y_offset = $request->input('y_offset', 26);  // Vertical offset from top of page (mm)
+        
+        // Use request data or fallback to example data
+        $data = [
+            'faculty_name' => $facultyName ?? 'Dr. Juan Dela Cruz',
+            'college' => $request->college ?? 'College of Arts and Sciences',
+            'course_code' => $request->course_code ?? 'MATH 101',
+            'course_title' => $request->course_title ?? 'College Algebra',
+            'program_level' => $request->program_level ?? 'Undergraduate',
+            'semester' => $term ?? '1st Semester',
+            'academic_year' => $request->academic_year ?? '2025-2026',
+            'ratings' => $request->ratings ?? [5, 4, 5, 3, 4, 5, 5, 4, 3, 5, 4, 5, 4, 4, 5],
+            'comments' => $request->comments ?? 'Great teacher! Very engaging and helpful during consultations.',
+            'evaluator_name' => $request->evaluator_name ?? 'Maria Santos',
+            'evaluator_id' => $request->evaluator_id ?? '2024-12345',
+            'date' => $request->date ?? date('F j, Y')
+        ];
+        
+        // ============================================
+        // REGISTER TIMES NEW ROMAN FONTS
+        // ============================================
+        $font_path = public_path('fonts/times_new_roman_fonts');
+        
+        // Check if fonts exist before adding
+        if (file_exists($font_path . '/TIMES.TTF')) {
+            \TCPDF_FONTS::addTTFfont($font_path . '/TIMES.TTF', 'TrueTypeUnicode', '', 32);
+        }
+        if (file_exists($font_path . '/TIMESBD.TTF')) {
+            \TCPDF_FONTS::addTTFfont($font_path . '/TIMESBD.TTF', 'TrueTypeUnicode', '', 32);
+        }
+        if (file_exists($font_path . '/TIMESBI.TTF')) {
+            \TCPDF_FONTS::addTTFfont($font_path . '/TIMESBI.TTF', 'TrueTypeUnicode', '', 32);
+        }
+        if (file_exists($font_path . '/TIMESI.TTF')) {
+            \TCPDF_FONTS::addTTFfont($font_path . '/TIMESI.TTF', 'TrueTypeUnicode', '', 32);
+        }
+        
+        // Define benchmark statements
+        $statements = [
+            'Benchmark Statements for Faculty Teaching Effectiveness',
+            'A. Management of Teaching and Learning',
+            'Management of Teaching and Learning refers to the intentional and organized handling of classroom presence, clear communication of academic expectations, efficient use of time, and the purposeful use of student-centered activities that promote critical thinking, independent learning, reflection, decision-making, and continuous academic improvement through constructive feedback.',
+            '1. Comes to class on time.',
+            '2. Explains learning outcomes, expectations, grading system, and requirements of the subject/course.',
+            '3. Maximizes the allocated time/learning hours effectively.',
+            '4. Facilitates students to think critically and creatively by providing appropriate learning activities.',
+            '5. Guides students to learn on their own, reflect on new ideas and experiences, and make decisions in accomplishing given tasks.',
+            '6. Communicates constructive feedback to students for their academic growth.',
+            'B. Content Knowledge, Pedagogy and Technology',
+            'Content Knowledge, Pedagogy, and Technology refer to a teacher\'s ability to demonstrate a strong grasp of subject matter, present complex concepts in a clear and accessible way, relate content to real-world contexts and current developments, engage students through appropriate instructional strategies and digital tools, and apply assessment methods aligned with intended learning outcomes.',
+            '7. Demonstrates extensive and broad knowledge of the subject/course.',
+            '8. Simplifies complex ideas for ease of understanding.',
+            '9. Relates subject matter to contemporary issues and developments in the discipline and/or daily life activities.',
+            '10. Promotes active learning and student engagement by using appropriate teaching and learning resources including ICT tools and platforms.',
+            '11. Uses appropriate assessments (project, exams, quizzes, assignments, etc.) aligned with learning outcomes.',
+            'C. Commitment and Transparency',
+            'Commitment and Transparency refer to the teacher\'s consistent dedication to supporting student learning by acknowledging learner diversity, offering timely academic support and feedback, and upholding fairness and accountability through the use of clear and openly communicated performance criteria.',
+            '12. Recognizes and values the unique diversity and individual differences among students.',
+            '13. Assists students with their learning challenges during consultations hours.',
+            '14. Provides immediate feedback on student outputs and performance.',
+            '15. Provides transparent and clear criteria in rating student\'s performance.',
+            'TOTAL SCORE = SUM OF ALL SCORES',
+            'RATING = (Total Score/75) x 100',
+        ];
+        
+        // ALL FONT SIZE IS 10
+        $font_size = 10;
+        $title_font_size = 10;
+        $header_font_size = 10;
+        $body_font_size = 10;
+        $small_font_size = 10;
+        
+        // Calculate row height based on font size 10
+        $row_height = 5;
+        $scale_row_height = 5;
+        $sig_row_height = 5;
+        
+        // ============================================
+        // LEGAL SIZE PAPER: 8.5" x 14" = 216mm x 356mm
+        // ============================================
+        $pdf = new TCPDF('P', 'mm', 'LEGAL', true, 'UTF-8', false);
+        
+        // Set document information
+        $pdf->SetCreator('Your School Name');
+        $pdf->SetAuthor('Student Evaluation System');
+        $pdf->SetTitle('Student Evaluation of Teachers');
+        $pdf->SetSubject('SET Form');
+        
+        // Remove default header/footer
+        $pdf->setPrintHeader(false);
+        $pdf->setPrintFooter(false);
+        
+        // Set margins using offsets
+        $pdf->SetMargins($x_offset, $y_offset, $x_offset);
+        $pdf->SetAutoPageBreak(false);
+        
+        // Add a page
+        $pdf->AddPage();
+        
+        // ============================================
+        // ADD FULL PAGE WATERMARK BACKGROUND
+        // ============================================
+        $watermark_path = public_path('image/lnu_watermark.png');
+
+        if (file_exists($watermark_path)) {
+            $page_width = $pdf->getPageWidth();
+            $page_height = $pdf->getPageHeight();
+
+            // Draw watermark FIRST, fully opaque
+            $pdf->Image(
+                $watermark_path,
+                0,
+                0,
+                $page_width,
+                $page_height,
+                '',
+                '',
+                '',
+                false,
+                300
+            );
+        }
+        
+        // Apply Y offset
+        $current_y = $pdf->GetY();
+        $pdf->SetY($current_y + ($y_offset / 2));
+        
+        // Set font to Times New Roman (regular) size 10
+        $pdf->SetFont('times', '', $body_font_size);
+        
+        $current_height_used = 0;
+        
+        // Define consistent total table width (same for Rating Scale and Benchmark tables)
+        $total_table_width = 192; // Total width in mm
+        $rating_scale_width = 190;
+
+        $statement_width = 126;    // Width for statement text
+        $rating_width = 66;        // Width for rating columns (5 x 9mm)
+        
+        // Define Rating Scale column widths that sum to $total_table_width
+        $scale_col1 = 18;  // Scale column
+        $scale_col2 = 45;  // Qualitative Description column
+        $scale_col3 = ($total_table_width - $scale_col1 - $scale_col2) - 2; // Operational Definition column
+        
+        // ============================================
+        // TITLE
+        // ============================================
+        $pdf->SetX($x_offset);
+        $pdf->SetFont('times', 'B', $title_font_size);
+        $pdf->Cell(0, 8, 'STUDENT EVALUATION OF TEACHERS (SET)', 0, 1, 'C');
+        $current_height_used += 8;
+        $pdf->Ln(3);
+        $current_height_used += 3;
+        
+        // ============================================
+        // SECTION A: Faculty Information
+        // ============================================
+
+        // Increase the right indent for this section
+        $section_indent = 4.5; 
+        $current_x = $x_offset + $section_indent;
+
+        $pdf->SetX($current_x);
+        $pdf->SetFont('times', 'B', $header_font_size);
+        $pdf->Cell(0, 6, 'A. Faculty Information (to be accomplished by the Designated Office)', 0, 1, 'L');
+        $pdf->SetFont('times', '', $body_font_size);
+        $current_height_used += 6;
+
+        // Fetch semester data from database using the ID
+        $semesterData = DB::connection('lnu_poes')
+            ->table('school_years')
+            ->where('id', $data['semester'])
+            ->first();
+
+        $semester_display = '';
+        $academic_year_display = $data['academic_year'];
+
+        if ($semesterData) {
+            switch ($semesterData->semester) {
+                case 1:
+                    $semester_display = '1st Semester';
+                    break;
+                case 2:
+                    $semester_display = '2nd Semester';
+                    break;
+                case 3:
+                    $semester_display = 'Summer';
+                    break;
+                default:
+                    $semester_display = 'Semester ' . $semesterData->semester;
+            }
+            $academic_year_display = $semesterData->school_year_from . '-' . $semesterData->school_year_to;
+        } else {
+            $semester_display = $data['semester'];
+        }
+
+        // Name of Faculty
+        $pdf->SetX($current_x);
+        $pdf->SetFont('times', '', $body_font_size);
+        $label_text = 'Name of Faculty being Evaluated:';
+        $label_width = $pdf->GetStringWidth($label_text) + 0.5;
+        $pdf->Cell($label_width, $row_height, $label_text, 0, 0, 'L');
+        $pdf->SetFont('times', 'U', $body_font_size);
+        $pdf->Cell(0, $row_height, ' ' . $data['faculty_name'], 0, 1, 'L');
+        $current_height_used += $row_height;
+
+        // College/Department
+        $pdf->SetX($current_x);
+        $pdf->SetFont('times', '', $body_font_size);
+        $label_text = 'College/Department:';
+        $label_width = $pdf->GetStringWidth($label_text) + 0.5;
+        $pdf->Cell($label_width, $row_height, $label_text, 0, 0, 'L');
+        $pdf->SetFont('times', 'U', $body_font_size);
+        $pdf->Cell(0, $row_height, ' ' . $data['college'], 0, 1, 'L');
+        $current_height_used += $row_height;
+
+        // Course Code/Title
+        $pdf->SetX($current_x);
+        $pdf->SetFont('times', '', $body_font_size);
+        $label_text = 'Course Code/Title:';
+        $label_width = $pdf->GetStringWidth($label_text) + 0.5;
+        $pdf->Cell($label_width, $row_height, $label_text, 0, 0, 'L');
+        $pdf->SetFont('times', 'U', $body_font_size);
+        $pdf->Cell(0, $row_height, ' ' . $data['course_code'] . ' - ' . $data['course_title'], 0, 1, 'L');
+        $current_height_used += $row_height;
+
+        // Program Level
+        $pdf->SetX($current_x);
+        $pdf->SetFont('times', '', $body_font_size);
+        $label_text = 'Program Level:';
+        $label_width = $pdf->GetStringWidth($label_text) + 0.5;
+        $pdf->Cell($label_width, $row_height, $label_text, 0, 0, 'L');
+        $pdf->SetFont('times', 'U', $body_font_size);
+        $pdf->Cell(0, $row_height, ' ' . $data['program_level'], 0, 1, 'L', false, 0, 0, 2);
+        $current_height_used += $row_height;
+
+        // Semester or Term/Academic Year
+        $pdf->SetX($current_x);
+        $pdf->SetFont('times', '', $body_font_size);
+        $label_text = 'Semester or Term/Academic Year:';
+        $label_width = $pdf->GetStringWidth($label_text) + 0.5;
+        $pdf->Cell($label_width, $row_height, $label_text, 0, 0, 'L');
+        $pdf->SetFont('times', 'U', $body_font_size);
+        $pdf->Cell(0, $row_height, ' ' . $semester_display . ' - S.Y. ' . $academic_year_display, 0, 1, 'L');
+        $current_height_used += $row_height;
+
+        $pdf->Ln(1);
+        $current_height_used += 3;
+        
+        // ============================================
+        // SECTION B: Rating Scale
+        // ============================================
+        $pdf->SetX($current_x);
+        $pdf->SetFont('times', 'B', $header_font_size);
+        $pdf->Cell(0, 6, 'B. Rating Scale', 0, 1, 'L');
+        $pdf->SetFont('times', '', $body_font_size);
+        $current_height_used += 6;
+
+        // Center the Rating Scale table
+        $rating_scale_x_offset = $x_offset + (($total_table_width - $rating_scale_width) / 2);
+
+        // Rating scale table headers
+        $pdf->SetFillColor(200, 200, 200);
+        $pdf->SetX($rating_scale_x_offset);
+        $pdf->Cell($scale_col1, $scale_row_height, 'Scale', 1, 0, 'C', true);
+        $pdf->Cell($scale_col2, $scale_row_height, '    Qualitative Description', 1, 0, 'C', true);
+        $pdf->Cell($scale_col3, $scale_row_height, '         Operational Definition', 1, 1, 'L', true);
+        $current_height_used += $scale_row_height;
+
+        // Rating scale rows
+        $scale_data = [
+            ['5', 'Always manifested', 'Evident in nearly all relevant situations (91-100% of instances)'],
+            ['4', 'Often manifested', 'Evident most of the time, with occasional lapses (61-90%)'],
+            ['3', 'Sometimes manifested', 'Evident about half the time (31-60%)'],
+            ['2', 'Seldom manifested', 'Infrequently Demonstrated: Rarely evident in relevant situations (11-30%)'],
+            ['1', 'Never/Rarely manifested', 'Seldom Demonstrated: Almost never evident, with only isolated cases (0-10%)']
+        ];
+
+        $pdf->SetFillColor(255, 255, 255);
+        foreach ($scale_data as $row) {
+            $pdf->SetX($rating_scale_x_offset);
+            $pdf->Cell($scale_col1, $scale_row_height, $row[0], 1, 0, 'C');
+            $pdf->Cell($scale_col2, $scale_row_height,'       ' . $row[1], 1, 0, 'L');
+            $pdf->Cell($scale_col3, $scale_row_height,'         ' . $row[2], 1, 1, 'L');
+            $current_height_used += $scale_row_height;
+        }
+        
+        $pdf->Ln(2);
+        $current_height_used += 2;
+
+        // ============================================
+        // SECTION C: Instruction
+        // ============================================
+
+        $pdf->SetX($current_x);
+
+        $pdf->SetFont('times', 'B', $body_font_size);
+
+        // Print header
+        $header = 'C. Instruction:';
+        $pdf->Cell(
+            $pdf->GetStringWidth($header) + 1,
+            4,
+            $header,
+            0,
+            0,
+            'L'
+        );
+
+        $pdf->SetFont('times', '', $body_font_size);
+
+        // First line
+        $pdf->Cell(
+            0,
+            4,
+            'Read the benchmark statements carefully. Please rate the faculty on each of the following',
+            0,
+            1,
+            'L'
+        );
+
+        // Second line aligned to left
+        $pdf->SetX($current_x);
+
+        $pdf->Cell(
+            0,
+            4,
+            'statements using the above-listed rating scale. Encircle your rating.',
+            0,
+            1,
+            'L'
+        );
+
+        $pdf->Ln(1);
+        
+        // Track rating index
+        $rating_index = 0;
+        
+        // Alternate row colors
+        $fill = false;
+        
+        foreach ($statements as $idx => $statement) {
+            if (empty($statement)) {
+                $pdf->Ln(1);
+                $current_height_used += 1;
+                continue;
+            }
+            
+            // Check if this is the BENCHMARK TITLE row
+            if ($idx === 0 && $statement === 'Benchmark Statements for Faculty Teaching Effectiveness') {
+                $pdf->SetFont('times', 'B', $body_font_size);
+                $pdf->SetFillColor(200, 200, 200);
+                $pdf->SetX($x_offset);
+                
+                $text_height = $pdf->getStringHeight($statement_width, $statement);
+                $title_row_height = max(6, $text_height);
+                
+                $start_x = $pdf->GetX();
+                $start_y = $pdf->GetY();
+                
+                // Draw border AND background using Cell with fill
+                $pdf->SetXY($start_x, $start_y);
+                $pdf->Cell($statement_width, $title_row_height, $statement, 1, 0, 'C', true);
+                
+                // Move to rating header
+                $pdf->SetXY($start_x + $statement_width, $start_y);
+                
+                $pdf->SetFont('times', 'B', $body_font_size);
+                $pdf->Cell($rating_width, $title_row_height, 'Rating', 1, 1, 'C', true);
+                
+                $current_height_used += $title_row_height;
+                $pdf->SetFont('times', '', $body_font_size);
+                $fill = !$fill;
+                continue;
+            }
+
+            // Check if this is a section header (A., B., C.)
+            if (preg_match('/^[A-C]\.\s/', $statement) && !preg_match('/^\d+\./', $statement)) {
+                $pdf->SetFont('times', 'B', $body_font_size);
+                $pdf->SetFillColor(220, 220, 220);
+                $pdf->SetX($x_offset);
+                
+                $text_height = $pdf->getStringHeight($total_table_width, $statement);
+                $header_height = max(5, $text_height);
+                
+                // Draw border AND text using Cell (since it's a single line header)
+                $pdf->Cell($total_table_width, $header_height, $statement, 1, 1, 'L', true);
+                
+                $current_height_used += $header_height;
+                $pdf->SetFont('times', '', $body_font_size);
+                $fill = !$fill;
+                continue;
+            }
+            
+            // Check if this is a definition paragraph (should span FULL WIDTH)
+            if (!preg_match('/^\d+\./', $statement) && strlen($statement) > 50 && strpos($statement, '.') !== false) {
+                if (
+                    strpos($statement, ' refers to ') !== false ||
+                    strpos($statement, ' refer to ') !== false
+                ) {
+                    $pdf->SetFillColor(245, 245, 245);
+                    $pdf->SetX($x_offset);
+
+                    // Split title and remaining text
+                    if (strpos($statement, ' refers to ') !== false) {
+                        $separator = ' refers to ';
+                    } else {
+                        $separator = ' refer to ';
+                    }
+
+                    $parts = explode($separator, $statement, 2);
+                    $title_part = $parts[0];
+                    $rest_part = isset($parts[1]) ? $parts[1] : '';
+
+                    // Build HTML for the entire full-width cell
+                    $html = '<i>' . htmlspecialchars($title_part) . '</i>' . htmlspecialchars($separator . $rest_part);
+
+                    // Calculate proper height using the FULL table width
+                    $text_height = $pdf->getStringHeight($total_table_width - 2, strip_tags($html));
+                    $row_height_def = max(8, $text_height + 2);
+
+                    $start_x = $pdf->GetX();
+                    $start_y = $pdf->GetY();
+
+                    // Draw background + border using Cell (FULL WIDTH)
+                    $pdf->Cell($total_table_width, $row_height_def, '', 1, 0, 'L', true);
+
+                    // Write formatted text INSIDE bounds using writeHTMLCell (FULL WIDTH)
+                    $pdf->writeHTMLCell(
+                        $total_table_width - 2,
+                        $row_height_def - 1,
+                        $start_x + 1,
+                        $start_y + 1,
+                        $html,
+                        0,
+                        0,
+                        false,
+                        true,
+                        'L',
+                        true
+                    );
+
+                    // Move cursor correctly
+                    $pdf->SetXY($x_offset, $start_y + $row_height_def);
+
+                    $current_height_used += $row_height_def;
+                    $fill = !$fill;
+                    continue;
+                }
+            }
+
+            // Check if this is TOTAL SCORE or RATING row
+            if (strpos($statement, 'TOTAL SCORE') !== false || strpos($statement, 'RATING =') !== false) {
+                $pdf->SetFont('times', 'B', 9);  // Changed to 9
+                $pdf->SetFillColor(240, 240, 240);
+                $pdf->SetX($x_offset);
+                
+                $text_height = $pdf->getStringHeight($statement_width, $statement);
+                $row_height_total = max(5, $text_height);
+                
+                $start_x = $pdf->GetX();
+                $start_y = $pdf->GetY();
+                
+                // Draw statement cell with border AND text using Cell (single line)
+                $pdf->SetXY($start_x, $start_y);
+                $pdf->Cell($statement_width, $row_height_total, $statement, 1, 0, 'R', true);
+                
+                // Move to value area
+                $pdf->SetXY($start_x + $statement_width, $start_y);
+                
+                $total_score = array_sum($data['ratings']);
+                $rating_percentage = ($total_score / 75) * 100;
+                
+                if (strpos($statement, 'TOTAL SCORE') !== false) {
+                    $value = $total_score . ' / 75';
+                } else {
+                    $value = number_format($rating_percentage, 2) . '%';
+                }
+                
+                // Draw value cell with border
+                $pdf->Cell($rating_width, $row_height_total, $value, 1, 1, 'C', true);
+                
+                $current_height_used += $row_height_total;
+                $pdf->SetFont('times', '', 9);  // Changed to 9
+                $fill = !$fill;
+                continue;
+            }
+
+            // Regular numbered statements - WITH VISIBLE BORDERLINES on statement cells
+            $rating = '';
+            if ($rating_index < count($data['ratings']) && preg_match('/^\d+\./', $statement)) {
+                $rating = $data['ratings'][$rating_index];
+                $rating_index++;
+            }
+
+            $pdf->SetFillColor($fill ? 245 : 255, $fill ? 245 : 255, $fill ? 245 : 255);
+            $pdf->SetFont('times', '', 9);  // Changed to 9
+
+            // Calculate text height for MultiCell
+            $text_height = $pdf->getStringHeight($statement_width, $statement);
+            $row_height_stmt = max(5, $text_height);
+
+            // Save starting position
+            $start_x = $pdf->GetX();
+            $start_y = $pdf->GetY();
+
+            // Draw border FIRST using Cell (with background fill)
+            $pdf->SetXY($start_x, $start_y);
+            $pdf->Cell($statement_width, $row_height_stmt, '', 1, 0, 'L', $fill);
+
+            // THEN draw text using MultiCell WITHOUT border (over the same area)
+            $pdf->SetXY($start_x, $start_y);
+            $pdf->MultiCell($statement_width, $row_height_stmt, $statement, 0, 'L', false, 0);
+
+            // Move to the rating area (same row, after the statement)
+            $pdf->SetXY($start_x + $statement_width, $start_y);
+
+            // Draw rating cells using Cell() for each rating option
+            $rating_width_each = $rating_width / 5;
+            $start_x_rating = $pdf->GetX();
+            $start_y_rating = $pdf->GetY();
+
+            for ($i = 5; $i >= 1; $i--) {
+                // Calculate center position for the circle
+                $cell_x = $start_x_rating + ($rating_width_each * (5 - $i));
+                $cell_y = $start_y_rating;
+                $circle_radius = 2.5; // Radius in mm (adjust as needed)
+                $circle_center_x = $cell_x + ($rating_width_each / 2);
+                $circle_center_y = $cell_y + ($row_height_stmt / 2);
+                
+                if ($rating == $i) {
+                    // Draw the rating number WITHOUT circle first
+                    $rating_display = (string)$i;
+                    
+                    // Position each rating cell horizontally
+                    $pdf->SetXY($cell_x, $cell_y);
+                    // Draw individual rating cell with border
+                    $pdf->Cell($rating_width_each, $row_height_stmt, $rating_display, 1, 0, 'C', $fill);
+                    
+                    // Draw transparent circle around the selected rating
+                    $pdf->SetDrawColor(0, 0, 0); // Black border
+                    $pdf->SetLineWidth(0.3); // Thin line
+                    $pdf->Circle($circle_center_x, $circle_center_y, $circle_radius, 0, 360, 'D');
+                } else {
+                    $rating_display = (string)$i;
+                    
+                    // Position each rating cell horizontally
+                    $pdf->SetXY($cell_x, $cell_y);
+                    // Draw individual rating cell with border
+                    $pdf->Cell($rating_width_each, $row_height_stmt, $rating_display, 1, 0, 'C', $fill);
+                }
+            }
+
+            // Move cursor to next row
+            $pdf->SetY($start_y_rating + $row_height_stmt);
+            $pdf->SetX($x_offset);
+
+            $current_height_used += $row_height_stmt;
+            $fill = !$fill;
+        }
+        
+        // Define indentation
+        $right_indent = 10;
+
+        // ============================================
+        // Other Comments and Suggestions
+        // ============================================
+        $pdf->Ln(2);
+        $current_height_used += 1.5;
+
+        // Position for the label and first line on the same row
+        $pdf->SetX($x_offset + $right_indent);
+        $pdf->SetFont('times', 'B', 9);  // Made the label bold
+
+        // Calculate width of the label text
+        $label_text = 'Other Comments and Suggestions:';
+        $label_width = $pdf->GetStringWidth($label_text);
+
+        // Draw the label
+        $pdf->Cell($label_width, 3, $label_text, 0, 0, 'L');  // Reduced height from 4 to 3
+        $pdf->SetFont('times', '', 9);
+
+        // Draw the first underlined line next to the label
+        $available_width = $total_table_width - $right_indent - 20;
+        $line_width = $available_width - $label_width;
+        $pdf->Cell($line_width, 3, '', 'B', 1);  // Reduced height from 4 to 3
+        $current_height_used += 3;  // Reduced from 4 to 3
+
+        // Additional underlined lines with less vertical space
+        $pdf->SetX($x_offset + $right_indent);
+        $pdf->Cell($available_width, 3, '', 'B', 1);  // Reduced height from 4 to 3
+        $current_height_used += 3;  // Reduced from 4 to 3
+
+        $pdf->SetX($x_offset + $right_indent);
+        $pdf->Cell($available_width, 3, '', 'B', 1);  // Reduced height from 4 to 3
+        $current_height_used += 3;  // Reduced from 4 to 3
+
+        $pdf->Ln(2);  // Reduced from 3 to 2
+        $current_height_used += 2;
+
+        // ============================================
+        // Signature Section
+        // ============================================
+
+        $label_width = 60;
+        $line_width = 100;
+        $sig_row_height = 3;  // Reduced from 5 to 3 for tighter spacing
+
+        // Signature of Evaluator
+        $pdf->SetX($x_offset + $right_indent);
+        $pdf->SetFont('times', 'B', $body_font_size);
+        $pdf->Cell($label_width, $sig_row_height, 'Signature of Evaluator', 0, 0, 'L');
+        $pdf->SetFont('times', '', $body_font_size);
+        $pdf->Cell(3, $sig_row_height, ':', 0, 0, 'R');
+        $pdf->Cell($line_width - 3, $sig_row_height, ' ', 'B', 1);
+        $current_height_used += $sig_row_height;
+
+        // Name of Evaluator/ID number
+        $pdf->SetX($x_offset + $right_indent);
+        $pdf->SetFont('times', 'B', $body_font_size);
+        $pdf->Cell($label_width, $sig_row_height, 'Name of Evaluator/ID number', 0, 0, 'L');
+        $pdf->SetFont('times', '', $body_font_size);
+        $pdf->Cell(3, $sig_row_height, ':', 0, 0, 'R');
+        $pdf->Cell($line_width - 3, $sig_row_height, ' ' . $data['evaluator_name'] . ' / ' . $data['evaluator_id'], 'B', 1);
+        $current_height_used += $sig_row_height;
+
+        // Date
+        $pdf->SetX($x_offset + $right_indent);
+        $pdf->SetFont('times', 'B', $body_font_size);
+        $pdf->Cell($label_width, $sig_row_height, 'Date', 0, 0, 'L');
+        $pdf->SetFont('times', '', $body_font_size);
+        $pdf->Cell(3, $sig_row_height, ':', 0, 0, 'R');
+        $pdf->Cell($line_width - 3, $sig_row_height, ' ' . $data['date'], 'B', 1);
+        $current_height_used += $sig_row_height;
+
+        $pdf->Ln(2);  // Reduced from 3 to 2
+        $current_height_used += 2;
+        
+        // Generate PDF output
+        $pdfOutput = $pdf->Output('', 'S');
+        
+        // Save PDF to temporary storage
+        $filename = 'set_' . ($facultyId ?? 'export') . '_' . time() . '.pdf';
+        Storage::disk('local')->put('temp/pdf/' . $filename, $pdfOutput);
+        
+        // Return URL to access the saved PDF
+        return response()->json([
+            'pdf_url' => route('pdf.display', ['filename' => $filename])
+        ]);
+    }
+
+    public function display($filename)
+    {
+        $path = 'temp/pdf/' . $filename;
+        
+        if (!Storage::disk('local')->exists($path)) {
+            abort(404, 'PDF not found');
+        }
+        
+        $file = Storage::disk('local')->get($path);
+        
+        return response()->make($file, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="' . $filename . '"'
+        ]);
+    }
+}

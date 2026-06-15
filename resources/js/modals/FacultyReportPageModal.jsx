@@ -71,6 +71,7 @@ export default function FacultyReportPageModal({
     errorMessage = '',
     instructorId = null,
     termId = null,
+    facultyName = '', // Add facultyName prop
 }) {
     const [isSubmissionsModalOpen, setIsSubmissionsModalOpen] = useState(false);
     const [selectedCourseData, setSelectedCourseData] = useState(null);
@@ -112,10 +113,10 @@ export default function FacultyReportPageModal({
                         leaveFrom="opacity-100 scale-100"
                         leaveTo="opacity-0 scale-95"
                     >
-                        <div className="relative w-full max-w-5xl rounded-xl border border-slate-200 bg-white shadow-2xl">
+                        <div className="relative w-full max-w-6xl rounded-xl border border-slate-200 bg-white shadow-2xl">
                             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
                                 <h2 className="text-lg font-semibold text-slate-900">
-                                    SET/SEF Breakdown
+                                    Student Evaluation of Teachers (SET)
                                 </h2>
                                 <button
                                     type="button"
@@ -139,32 +140,6 @@ export default function FacultyReportPageModal({
                                     </div>
                                 ) : null}
 
-                                <div className="mb-4">
-                                    <h3 className="text-sm font-semibold text-slate-900">
-                                        SEF Breakdown
-                                    </h3>
-
-                                    <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                        <div>
-                                            <p className="text-xs text-slate-500">Total Score</p>
-                                            <p className="text-sm font-semibold text-slate-900">
-                                                {selectedSefBreakdown?.total_score ?? '-'}
-                                            </p>
-                                        </div>
-
-                                        <div>
-                                            <p className="text-xs text-slate-500">Rating</p>
-                                            <p className="text-sm font-semibold text-slate-900">
-                                                {selectedSefBreakdown?.rating ?? '-'}
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <h3 className="mb-3 text-sm font-semibold text-slate-900">
-                                    SET Breakdown
-                                </h3>
-
                                 <table className="min-w-full divide-y divide-slate-200 text-sm">
                                     <thead className="bg-slate-50">
                                         <tr>
@@ -173,23 +148,23 @@ export default function FacultyReportPageModal({
                                             </th>
 
                                             <th className="px-4 py-2.5 text-left font-semibold text-slate-600">
-                                                (1) Course Code
+                                                Course Code
                                             </th>
 
                                             <th className="px-4 py-2.5 text-left font-semibold text-slate-600">
-                                                (2) Year/Section
+                                                Year/Section
                                             </th>
 
                                             <th className="px-4 py-2.5 text-left font-semibold text-slate-600">
-                                                (3) No. of Students
+                                                No. of Students
                                             </th>
 
                                             <th className="px-4 py-2.5 text-left font-semibold text-slate-600">
-                                                (4) Average SET Rating
+                                                Average SET Rating
                                             </th>
 
                                             <th className="px-4 py-2.5 text-left font-semibold text-slate-600">
-                                                (3 x 5) Weighted SET Score
+                                                Weighted SET Score
                                             </th>
                                             
                                             <th className="px-4 py-2.5 text-left font-semibold text-slate-600">
@@ -275,9 +250,11 @@ export default function FacultyReportPageModal({
                 isOpen={isSubmissionsModalOpen}
                 onClose={() => setIsSubmissionsModalOpen(false)}
                 courseCode={selectedCourseData?.courseCode}
+                courseDesc={selectedCourseData?.courseDescription}
                 yearSection={selectedCourseData?.yearSection}
                 instructorId={selectedCourseData?.instructorId}
                 termId={selectedCourseData?.termId}
+                instructorName={facultyName}
             />
         </>
     );

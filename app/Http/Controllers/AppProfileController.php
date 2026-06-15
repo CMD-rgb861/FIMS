@@ -38,7 +38,6 @@ class AppProfileController extends Controller
                     : null,
             ],
             'oldInput' => $request->session()->get('_old_input', []),
-            'hasPendingEvaluations' => false,
         ]));
     }
 
@@ -116,7 +115,6 @@ class AppProfileController extends Controller
                 'email' => $personalInformation?->email,
             ],
             'oldInput' => $request->session()->get('_old_input', []),
-            'hasPendingEvaluations' => false,
         ]));
     }
 

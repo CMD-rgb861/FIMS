@@ -1,7 +1,7 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import AppLayout from '../Layouts/AppLayout';
-import { router } from '@inertiajs/react';
+import { router, Link } from '@inertiajs/react'; // Add Link import
 import FacultyReportPageModal from '../modals/FacultyReportPageModal';
 
 export default function FacultySubjectReportPage({
@@ -20,6 +20,7 @@ export default function FacultySubjectReportPage({
     schoolYears = [],
     selectedSchoolYear = '',
     isFacultyView = true,
+    hasPendingEvaluations = false,
 }) {
     const [isLoading, setIsLoading] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -78,7 +79,26 @@ export default function FacultySubjectReportPage({
         (option) => String(option.value) === String(selectedSchoolYear)
     )?.label ?? 'All School Years';
 
-    const reportSummaryCards = reportSummary.map((summary, index) => (
+    const completeReportSummary = useMemo(() => {
+        const hasAverageSef = reportSummary.some(
+            (summary) => summary.label === 'Average SEF Rating'
+        );
+
+        if (hasAverageSef) {
+            return reportSummary;
+        }
+
+        return [
+            ...reportSummary,
+            {
+                label: 'Average SEF Rating',
+                value: 'N/A',
+                helper: 'Average SEF score from supervisor evaluations.',
+            },
+        ];
+    }, [reportSummary]);
+
+    const reportSummaryCards = completeReportSummary.map((summary, index) => (
         <div key={index} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <p className="text-xs font-medium text-slate-500">{summary.label}</p>
             <p className="mt-2 text-2xl font-semibold text-slate-900">{summary.value}</p>
@@ -112,7 +132,7 @@ export default function FacultySubjectReportPage({
             
             <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-slate-600">SET Rating</span>
+                    <span className="text-xs font-medium text-slate-600">Subject Overall SET Rating</span>
                     <span className={`text-xs font-semibold ${
                         subject.set_rating !== null ? 'text-blue-600' : 'text-slate-400'
                     }`}>
@@ -120,16 +140,16 @@ export default function FacultySubjectReportPage({
                     </span>
                 </div>
                 
-                <div className="flex items-center justify-between">
+                {/* <div className="flex items-center justify-between">
                     <span className="text-xs font-medium text-slate-600">SEF Score</span>
                     <span className={`text-xs font-semibold ${
                         subject.sef_score !== null ? 'text-emerald-600' : 'text-slate-400'
                     }`}>
                         {subject.sef_score_formatted}
                     </span>
-                </div>
+                </div> */}
                 
-                <div className="flex items-center justify-between">
+                {/* <div className="flex items-center justify-between">
                     <span className="text-xs font-medium text-slate-600">Status</span>
                     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                         subject.final_grade !== null
@@ -138,9 +158,9 @@ export default function FacultySubjectReportPage({
                             ? 'bg-blue-100 text-blue-700'
                             : 'bg-amber-100 text-amber-700'
                     }`}>
-                        {/* {subject.status} */}
+                        {subject.status}
                     </span>
-                </div>
+                </div> */}
                 
                 {subject.final_grade !== null && (
                     <div className="mt-2 pt-2 border-t border-slate-100">
@@ -167,94 +187,109 @@ export default function FacultySubjectReportPage({
             activePage="reports"
             logoutUrl={logoutUrl}
             csrfToken={csrfToken}
-            hasPendingEvaluations={false}
+            hasPendingEvaluations={hasPendingEvaluations}
         >
-            <main className="flex-1 p-6">
-                <div className="mb-6">
-                    <h1 className="text-2xl font-semibold tracking-tight">My Subjects</h1>
-                    <p className="mt-1 text-sm text-slate-500">View your subject evaluations and ratings.</p>
-                </div>
-
-                {/* Report Summary Cards */}
-                <div className="mb-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {reportSummaryCards}
+            <main className="flex-1 overflow-y-auto">
+                {/* Breadcrumbs - same style as FacultyReportPage */}
+                <div className="h-16 bg-white border-b border-slate-200 flex items-center px-6">
+                    <div className="text-sm text-slate-500 flex items-center gap-2">
+                        <Link href={dashboardUrl} className="hover:text-slate-700">Home</Link>
+                        <span className="text-slate-300">›</span>
+                        <Link href={reportsUrl} className="hover:text-slate-700">Reports</Link>
+                        <span className="text-slate-300">›</span>
+                        <span className="text-slate-700">Subjects</span>
                     </div>
                 </div>
 
-                {/* Filters */}
-                <div className="mb-6">
-                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                        <div className="w-full md:w-64">
-                            <label className="block text-sm font-medium text-slate-700 mb-1">
-                                School Year
-                            </label>
-                            <select
-                                value={selectedSchoolYear ? String(selectedSchoolYear) : ''}
-                                onChange={handleSchoolYearChange}
-                                disabled={isLoading}
-                                className="w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 disabled:opacity-50"
-                            >
-                                {schoolYears.length > 0 ? (
-                                    schoolYears.map((option) => (
-                                        <option key={option.value} value={option.value}>
-                                            {option.label}
-                                        </option>
-                                    ))
-                                ) : (
-                                    <option value="">No school years available</option>
-                                )}
-                            </select>
+                {/* Main content area with padding */}
+                <div className="p-6">
+                    <div className="mb-6">
+                        <h1 className="text-2xl font-semibold tracking-tight">My Subjects</h1>
+                        <p className="mt-1 text-sm text-slate-500">View your subject evaluations and ratings.</p>
+                    </div>
+
+                    {/* Report Summary Cards */}
+                    <div className="mb-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            {reportSummaryCards}
                         </div>
-                        
-                        <div className="flex items-center gap-2">
-                            <span className="inline-flex items-center rounded-md bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
-                                {selectedSchoolYearLabel}
+                    </div>
+
+                    {/* Filters */}
+                    <div className="mb-6">
+                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                            <div className="w-full md:w-64">
+                                <label className="block text-sm font-medium text-slate-700 mb-1">
+                                    School Year
+                                </label>
+                                <select
+                                    value={selectedSchoolYear ? String(selectedSchoolYear) : ''}
+                                    onChange={handleSchoolYearChange}
+                                    disabled={isLoading}
+                                    className="w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 disabled:opacity-50"
+                                >
+                                    {schoolYears.length > 0 ? (
+                                        schoolYears.map((option) => (
+                                            <option key={option.value} value={option.value}>
+                                                {option.label}
+                                            </option>
+                                        ))
+                                    ) : (
+                                        <option value="">No school years available</option>
+                                    )}
+                                </select>
+                            </div>
+                            
+                            <div className="flex items-center gap-2">
+                                <span className="inline-flex items-center rounded-md bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
+                                    {selectedSchoolYearLabel}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Subjects Grid */}
+                    <section>
+                        <div className="mb-4 flex items-center justify-between">
+                            <h2 className="text-lg font-semibold text-slate-900">My Subjects</h2>
+                            <span className="text-sm text-slate-500">
+                                {facultySubjects.length} subject(s)
                             </span>
                         </div>
-                    </div>
-                </div>
-
-                {/* Subjects Grid */}
-                <section>
-                    <div className="mb-4 flex items-center justify-between">
-                        <h2 className="text-lg font-semibold text-slate-900">My Subjects</h2>
-                        <span className="text-sm text-slate-500">
-                            {facultySubjects.length} subject(s)
-                        </span>
-                    </div>
-                    
-                    <div className="relative">
-                        {isLoading && (
-                            <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg">
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                            </div>
-                        )}
                         
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {subjectCards}
+                        <div className="relative">
+                            {isLoading && (
+                                <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                                </div>
+                            )}
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {subjectCards}
+                            </div>
+                            
+                            {(!facultySubjects || facultySubjects.length === 0) && !isLoading && (
+                                <div className="text-center py-12">
+                                    <p className="text-slate-500">No subjects found for the selected school year.</p>
+                                </div>
+                            )}
                         </div>
-                        
-                        {(!facultySubjects || facultySubjects.length === 0) && !isLoading && (
-                            <div className="text-center py-12">
-                                <p className="text-slate-500">No subjects found for the selected school year.</p>
-                            </div>
-                        )}
-                    </div>
-                </section>
+                    </section>
 
-                {/* Modal for Breakdown */}
-                <FacultyReportPageModal
-                    isOpen={isModalOpen}
-                    onClose={closeModal}
-                    setBreakdownRows={breakdownData?.set_breakdown || []}
-                    selectedCourseCode={selectedSubject?.course_code || ''}
-                    selectedSefBreakdown={breakdownData?.sef_breakdown || null}
-                    isLoading={modalLoading}
-                    errorMessage={modalError}
-                    instructorId={user?.id_no}
-                    termId={selectedSchoolYear}
-                />
+                    {/* Modal for Breakdown */}
+                    <FacultyReportPageModal
+                        isOpen={isModalOpen}
+                        onClose={closeModal}
+                        setBreakdownRows={breakdownData?.set_breakdown || []}
+                        selectedCourseCode={selectedSubject?.course_code || ''}
+                        selectedSefBreakdown={breakdownData?.sef_breakdown || null}
+                        isLoading={modalLoading}
+                        errorMessage={modalError}
+                        instructorId={user?.id_no}
+                        termId={selectedSchoolYear}
+                        facultyName={user ? `${user.firstname} ${user.lastname}` : ''}
+                    />
+                </div>
             </main>
         </AppLayout>
     );

@@ -52,7 +52,6 @@ class GradesController extends Controller
 
         $gradesProps = $this->commonInertiaProps($currentUser, [
             'evaluations' => $evaluations,
-            'hasPendingEvaluations' => $gradedCount < count($facultyEvaluations),
         ]);
 
         return Inertia::render('GradesPage', $gradesProps);

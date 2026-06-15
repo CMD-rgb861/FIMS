@@ -24,7 +24,9 @@ export default function Sidebar({
     const profilePhotoUrl = resolvedUser?.profile_photo_url ?? '';
     const role = normalizeRole(resolvedUser?.role);
     const roleLabel = getRoleLabel(role);
-    const resolvedCanAccessEvaluation = resolvedUser?.canEvaluateFaculty ?? false;
+    const resolvedCanAccessEvaluation =
+    (resolvedUser?.canEvaluateFaculty ?? false) &&
+    role !== 'dean';
 
     const navClass = (key) => (
         activePage === key
@@ -73,7 +75,7 @@ export default function Sidebar({
                     <span className="text-sm font-medium">Subjects</span>
                 </a>
 
-                {/* {resolvedCanAccessEvaluation ? (
+                {resolvedCanAccessEvaluation ? (
                     <a href={evaluationUrl} className={navClass('evaluation')}>
                         <span className={iconClass('evaluation')}>
                             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
@@ -87,7 +89,7 @@ export default function Sidebar({
                             <span className="ml-auto inline-flex h-2.5 w-2.5 rounded-full bg-red-500" aria-label="Pending evaluations" title="Pending evaluations" />
                         ) : null}
                     </a>
-                ) : null} */}
+                ) : null}
 
                 {/* {resolvedCanAccessEvaluation ? (
                     <a href={gradesUrl} className={navClass('grades')}>

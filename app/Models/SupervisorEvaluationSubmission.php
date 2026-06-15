@@ -13,10 +13,11 @@ class SupervisorEvaluationSubmission extends Model
 
     protected $fillable = [
         'user_id',
-        'instructor',
-        'course_code',
-        'course_title',
-        'term',
+        'instructor_id_no',
+        // course fields removed: supervisor evaluations are per-instructor
+        'college_id',
+        'unit_id',
+        'term_id',
         'total_score',
         'max_score',
         'rating_percentage',
@@ -30,6 +31,9 @@ class SupervisorEvaluationSubmission extends Model
         return [
             'submitted_at' => 'datetime',
             'rating_percentage' => 'decimal:2',
+            'total_score' => 'integer',
+            'max_score' => 'integer',
+            'term_id' => 'integer',
         ];
     }
 
@@ -41,6 +45,21 @@ class SupervisorEvaluationSubmission extends Model
     public function answers(): HasMany
     {
         return $this->hasMany(SupervisorEvaluationAnswer::class, 'submission_id');
+    }
+
+    public function instructorUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'instructor_id_no', 'id_no');
+    }
+
+    public function college(): BelongsTo
+    {
+        return $this->belongsTo(College::class);
+    }
+
+    public function unit(): BelongsTo
+    {
+        return $this->belongsTo(Unit::class);
     }
 
     /**
@@ -85,10 +104,11 @@ class SupervisorEvaluationSubmission extends Model
         // Create submission
         $submission = self::create([
             'user_id' => $payload['user_id'],
-            'instructor' => $payload['instructor'],
-            'course_code' => $payload['course_code'],
-            'course_title' => $payload['course_title'] ?? '',
-            'term' => $payload['term'],
+            'instructor_id_no' => $payload['instructor_id_no'] ?? null,
+            // course_code/course_title intentionally not stored for supervisor evaluations
+            'college_id' => $payload['college_id'] ?? null,
+            'unit_id' => $payload['unit_id'] ?? null,
+            'term_id' => $payload['term_id'] ?? null,
             'total_score' => $totalScore,
             'max_score' => $maxScore,
             'rating_percentage' => round($ratingPercentage, 2),

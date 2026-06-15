@@ -1,10 +1,13 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head } from '@inertiajs/react';
+import { Head, usePage } from '@inertiajs/react';
 import DeleteUserForm from './Partials/DeleteUserForm';
 import UpdatePasswordForm from './Partials/UpdatePasswordForm';
 import UpdateProfileInformationForm from './Partials/UpdateProfileInformationForm';
 
 export default function Edit({ mustVerifyEmail, status }) {
+    const { url } = usePage();
+    const dashboardUrl = route('dashboard'); // or '/dashboard' if you prefer
+    
     return (
         <AuthenticatedLayout
             header={
@@ -14,6 +17,15 @@ export default function Edit({ mustVerifyEmail, status }) {
             }
         >
             <Head title="Account Settings" />
+
+            {/* Breadcrumb Navigation */}
+            <div className="h-16 bg-white border-b border-slate-200 flex items-center px-6">
+                <div className="text-sm text-slate-500 flex items-center gap-2">
+                    <a href={dashboardUrl} className="hover:text-slate-700">Home</a>
+                    <span className="text-slate-300">›</span>
+                    <span className="text-slate-700 font-medium">Account Settings</span>
+                </div>
+            </div>
 
             <div className="py-12">
                 <div className="mx-auto max-w-7xl space-y-6 sm:px-6 lg:px-8">

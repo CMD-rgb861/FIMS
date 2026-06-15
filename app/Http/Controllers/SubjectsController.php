@@ -101,10 +101,6 @@ class SubjectsController extends Controller
             ],
             'availableTerms' => $availableTerms,
             'selectedTerm' => $selectedTermId,
-            'hasPendingEvaluations' => UnitHeadGrade::query()
-                ->where('user_id', $currentUser->id)
-                ->distinct('instructor')
-                ->count('instructor') < count($facultyEvaluations),
         ]);
         
         return Inertia::render('SubjectsPage', $subjectsProps);

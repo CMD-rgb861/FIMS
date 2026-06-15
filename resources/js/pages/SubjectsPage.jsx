@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
-import { router } from '@inertiajs/react';
+import { router, Link } from '@inertiajs/react'; // Added Link for better navigation
 import AppLayout from '../Layouts/AppLayout';
 
 export default function SubjectsPage({
@@ -17,7 +17,7 @@ export default function SubjectsPage({
     user = null,
     subjects = [],
     availableTerms = [],
-    selectedTerm = '', // Receive selected term from backend
+    selectedTerm = '',
     hasPendingEvaluations = false,
 }) {
     const displayName = useMemo(() => {
@@ -196,89 +196,101 @@ export default function SubjectsPage({
             hasPendingEvaluations={hasPendingEvaluations}
             layoutClassName="h-screen flex overflow-hidden bg-slate-50 text-slate-900"
         >
-            <main className="flex-1 overflow-y-auto p-6">
-                <div className="mb-6">
-                    <h1 className="text-2xl font-semibold tracking-tight">Enrolled Subjects</h1>
-                    <p className="mt-1 text-sm text-slate-500">Faculty: {displayName}</p>
+            <main className="flex-1 overflow-y-auto">
+                {/* Breadcrumbs - same style as EvaluationPage */}
+                <div className="h-16 bg-white border-b border-slate-200 flex items-center px-6">
+                    <div className="text-sm text-slate-500 flex items-center gap-2">
+                        <Link href={dashboardUrl} className="hover:text-slate-700">Home</Link>
+                        <span className="text-slate-300">›</span>
+                        <span className="text-slate-700 font-medium">Subjects</span>
+                    </div>
                 </div>
 
-                <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 px-4 py-3 gap-3">
-                        <p className="text-sm font-semibold text-slate-900">Enrolled Subjects</p>
-                        <div className="flex items-center gap-3">
-                            {availableTerms.length > 0 && (
-                                <label className="text-xs text-slate-600">
-                                    <span className="mr-2">Filter by Term:</span>
-                                    <select
-                                        value={localSelectedTerm}
-                                        onChange={handleTermChange}
-                                        disabled={isLoading}
-                                        className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    >
-                                        {availableTerms.map((term) => (
-                                            <option key={term.id} value={term.id}>
-                                                {term.label}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </label>
-                            )}
-                            <p className="text-xs text-slate-500">
-                                {subjectPagination?.total || subjectItems.length} total records
-                            </p>
-                        </div>
+                {/* Main content with padding */}
+                <div className="p-6">
+                    <div className="mb-6">
+                        <h1 className="text-2xl font-semibold tracking-tight">Enrolled Subjects</h1>
+                        <p className="mt-1 text-sm text-slate-500">Faculty: {displayName}</p>
                     </div>
 
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-slate-200 text-xs">
-                            <thead className="bg-slate-50">
-                                <tr>
-                                    <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Course Code</th>
-                                    <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Course Description</th>
-                                    <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Units</th>
-                                    <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Section</th>
-                                    <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Schedule</th>
-                                    <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Days</th>
-                                    <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Room</th>
-                                    <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Term</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-200 bg-white">
-                                {subjectItems.length > 0 ? (
-                                    subjectItems.map((subject, index) => (
-                                        <tr key={`${subject.course_code}-${subject.course_description}-${index}`} className="hover:bg-slate-50 transition">
-                                            <td className="px-4 py-2.5 font-medium text-slate-900">{subject.course_code || '-'}</td>
-                                            <td className="px-4 py-2.5 text-slate-700">{subject.course_description || '-'}</td>
-                                            <td className="px-4 py-2.5 text-slate-700">{subject.course_units ?? '-'}</td>
-                                            <td className="px-4 py-2.5 text-slate-700">{subject.section_code || '-'}</td>
-                                            <td className="px-4 py-2.5 text-slate-700">{subject.schedule_time || '-'}</td>
-                                            <td className="px-4 py-2.5 text-slate-700">{subject.schedule_days || '-'}</td>
-                                            <td className="px-4 py-2.5 text-slate-700">{subject.room || '-'}</td>
-                                            <td className="px-4 py-2.5 text-slate-700">
-                                                {subject.term || subject.semester || (subject.school_year_id ? `SY #${subject.school_year_id}` : '-')}
+                    <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 px-4 py-3 gap-3">
+                            <p className="text-sm font-semibold text-slate-900">Enrolled Subjects</p>
+                            <div className="flex items-center gap-3">
+                                {availableTerms.length > 0 && (
+                                    <label className="text-xs text-slate-600">
+                                        <span className="mr-2">Filter by Term:</span>
+                                        <select
+                                            value={localSelectedTerm}
+                                            onChange={handleTermChange}
+                                            disabled={isLoading}
+                                            className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        >
+                                            {availableTerms.map((term) => (
+                                                <option key={term.id} value={term.id}>
+                                                    {term.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                )}
+                                <p className="text-xs text-slate-500">
+                                    {subjectPagination?.total || subjectItems.length} total records
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-slate-200 text-xs">
+                                <thead className="bg-slate-50">
+                                    <tr>
+                                        <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Course Code</th>
+                                        <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Course Description</th>
+                                        <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Units</th>
+                                        <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Section</th>
+                                        <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Schedule</th>
+                                        <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Days</th>
+                                        <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Room</th>
+                                        <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Term</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-200 bg-white">
+                                    {subjectItems.length > 0 ? (
+                                        subjectItems.map((subject, index) => (
+                                            <tr key={`${subject.course_code}-${subject.course_description}-${index}`} className="hover:bg-slate-50 transition">
+                                                <td className="px-4 py-2.5 font-medium text-slate-900">{subject.course_code || '-'}</td>
+                                                <td className="px-4 py-2.5 text-slate-700">{subject.course_description || '-'}</td>
+                                                <td className="px-4 py-2.5 text-slate-700">{subject.course_units ?? '-'}</td>
+                                                <td className="px-4 py-2.5 text-slate-700">{subject.section_code || '-'}</td>
+                                                <td className="px-4 py-2.5 text-slate-700">{subject.schedule_time || '-'}</td>
+                                                <td className="px-4 py-2.5 text-slate-700">{subject.schedule_days || '-'}</td>
+                                                <td className="px-4 py-2.5 text-slate-700">{subject.room || '-'}</td>
+                                                <td className="px-4 py-2.5 text-slate-700">
+                                                    {subject.term || subject.semester || (subject.school_year_id ? `SY #${subject.school_year_id}` : '-')}
+                                                </td>
+                                            </tr>
+                                        ))
+                                    ) : (
+                                        <tr>
+                                            <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
+                                                {isLoading ? (
+                                                    <div className="flex items-center justify-center gap-2">
+                                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                                                        <span>Loading...</span>
+                                                    </div>
+                                                ) : (
+                                                    'No enrolled subjects found.'
+                                                )}
                                             </td>
                                         </tr>
-                                    ))
-                                ) : (
-                                    <tr>
-                                        <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
-                                            {isLoading ? (
-                                                <div className="flex items-center justify-center gap-2">
-                                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                                                    <span>Loading...</span>
-                                                </div>
-                                            ) : (
-                                                'No enrolled subjects found.'
-                                            )}
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
 
-                    {Pagination}
-                </section>
+                        {Pagination}
+                    </section>
+                </div>
             </main>
         </AppLayout>
     );

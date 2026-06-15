@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Traits;
 
+use App\Models\SupervisorEvaluationSubmission;
+use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -280,6 +282,128 @@ trait FacultyData
         ];
     }
 
+    protected function hasPendingEvaluations($user): bool
+    {
+        if (! $this->canAccessEvaluationForUser($user)) {
+            return false;
+        }
+
+        $activeSchoolYear = $this->getActiveSchoolYear();
+        if (! $activeSchoolYear) {
+            return false;
+        }
+
+        $assignedInstructorIds = $this->getAssignedEvaluationInstructorIdNos($user, $activeSchoolYear->id);
+        if (empty($assignedInstructorIds)) {
+            return false;
+        }
+
+        $evaluatedCount = SupervisorEvaluationSubmission::query()
+            ->where('user_id', $user->id)
+            ->where('term_id', $activeSchoolYear->id)
+            ->whereNotNull('instructor_id_no')
+            ->distinct()
+            ->count('instructor_id_no');
+
+        return $evaluatedCount < count($assignedInstructorIds);
+    }
+
+    protected function getAssignedEvaluationInstructorIdNos($user, int $schoolYearId): array
+    {
+        if (! $user) {
+            return [];
+        }
+
+        if ($user->isDean()) {
+            return [];
+        }
+
+        if ($user->isAssociateDean()) {
+            $associateDean = $user->associateDean;
+            if (! $associateDean?->college_id) {
+                return [];
+            }
+
+            $idNos = User::query()
+                ->whereHas('unitHead')
+                ->where('college_id', $associateDean->college_id)
+                ->pluck('id_no')
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+
+            return $this->filterInstructorIdNosBySchoolYear($idNos, $schoolYearId);
+        }
+
+        if ($user->isUnitHead()) {
+            $unitHead = $user->unitHead;
+            if (! $unitHead?->unit_id) {
+                return [];
+            }
+
+            $idNos = User::query()
+                ->where('unit_id', $unitHead->unit_id)
+                ->whereNotNull('id_no')
+                ->where('id_no', '!=', '')
+                ->pluck('id_no')
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+
+            return $this->filterInstructorIdNosBySchoolYear($idNos, $schoolYearId);
+        }
+
+        if ($user->isAdmin()) {
+            return $this->filterInstructorIdNosBySchoolYear([], $schoolYearId, true);
+        }
+
+        return [];
+    }
+
+    protected function filterInstructorIdNosBySchoolYear(array $idNos, int $schoolYearId, bool $all = false): array
+    {
+        $query = DB::connection('lnu_poes')
+            ->table('enrollment_courses')
+            ->where('school_year_id', $schoolYearId)
+            ->whereNotNull('id_no')
+            ->where('id_no', '!=', '');
+
+        if (! $all) {
+            if (empty($idNos)) {
+                return [];
+            }
+
+            $query->whereIn('id_no', $idNos);
+        }
+
+        return $query->pluck('id_no')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    protected function getActiveSchoolYear()
+    {
+        $cached = Cache::get('active_school_year');
+        if ($cached instanceof \stdClass && property_exists($cached, 'id') && property_exists($cached, 'school_year_from')) {
+            return $cached;
+        }
+
+        $fresh = DB::connection('lnu_poes')
+            ->table('school_years')
+            ->where('is_active', 1)
+            ->first();
+
+        if ($fresh) {
+            Cache::put('active_school_year', $fresh, now()->addSeconds(3600));
+        }
+
+        return $fresh;
+    }
+
     protected function commonInertiaProps($user, array $pageSpecificProps = []): array
     {
         return array_merge([
@@ -293,6 +417,7 @@ trait FacultyData
             'logoutUrl' => route('logout'),
             'csrfToken' => csrf_token(),
             'user' => $this->sharedUserPayload($user),
+            'hasPendingEvaluations' => $this->hasPendingEvaluations($user),
         ], $pageSpecificProps);
     }
 }
