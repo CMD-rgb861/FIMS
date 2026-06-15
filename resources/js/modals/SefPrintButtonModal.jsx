@@ -1,6 +1,6 @@
-// SefPrintButtonModal.jsx
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import axios from 'axios';
+import { toast } from 'react-toastify';
 
 // Memoized row component to prevent re-renders
 const FacultyRow = React.memo(({ faculty, isSelected, onToggle, isLoadingDetails }) => (
@@ -46,7 +46,6 @@ export default function SefPrintButtonModal({
         [facultyListAll, facultyList]
     );
     const [isGenerating, setIsGenerating] = useState(false);
-    const [error, setError] = useState('');
     const [facultyWithSef, setFacultyWithSef] = useState([]);
     const [isLoadingDetails, setIsLoadingDetails] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
@@ -55,7 +54,7 @@ export default function SefPrintButtonModal({
     // Cache ref to avoid refetching same data
     const cacheRef = useRef(new Map());
 
-    // Fetch SEF data using batch API (this endpoint works)
+    // Fetch SEF data using batch API
     const fetchAllSefData = useCallback(async () => {
         if (effectiveFacultyList.length === 0) return;
         
@@ -67,7 +66,6 @@ export default function SefPrintButtonModal({
         }
 
         setIsLoadingDetails(true);
-        setError('');
         
         try {
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
@@ -108,7 +106,10 @@ export default function SefPrintButtonModal({
             setCurrentPage(1);
         } catch (err) {
             console.error('Error fetching SEF data:', err);
-            setError(err.response?.data?.message || 'Failed to load SEF data. Please try again.');
+            toast.error(err.response?.data?.message || 'Failed to load SEF data. Please try again.', {
+                position: "top-right",
+                autoClose: 5000,
+            });
             setFacultyWithSef(effectiveFacultyList.map(f => ({ 
                 ...f, 
                 has_sef_data: false, 
@@ -131,7 +132,6 @@ export default function SefPrintButtonModal({
     useEffect(() => {
         if (!isOpen) {
             setSelectedFaculty([]);
-            setError('');
             setIsGenerating(false);
             setCurrentPage(1);
         }
@@ -156,12 +156,18 @@ export default function SefPrintButtonModal({
 
     const handleGeneratePDF = useCallback(async () => {
         if (selectedFaculty.length === 0) {
-            setError('Please select at least one faculty member to print.');
+            toast.error('Please select at least one faculty member to print.', {
+                position: "top-right",
+                autoClose: 3000,
+            });
             return;
         }
 
-        setError('');
         setIsGenerating(true);
+
+        const loadingToastId = toast.loading(`Generating SEF PDF for ${selectedFaculty.length} faculty member(s)...`, {
+            position: "top-right",
+        });
 
         try {
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
@@ -196,14 +202,29 @@ export default function SefPrintButtonModal({
             const pdfUrl = response.data.pdf_url;
             
             if (pdfUrl) {
+                toast.dismiss(loadingToastId);
+                
                 window.open(pdfUrl, '_blank');
+                
+                toast.success(`PDF generated successfully! ${selectedFaculty.length} faculty report(s) opening...`, {
+                    position: "top-right",
+                    autoClose: 3000,
+                });
                 onClose();
             } else {
-                setError('Failed to generate PDF. Please try again.');
+                toast.dismiss(loadingToastId);
+                toast.error('Failed to generate PDF. Please try again.', {
+                    position: "top-right",
+                    autoClose: 5000,
+                });
             }
         } catch (error) {
             console.error('Error generating PDF:', error);
-            setError(error.response?.data?.message || 'Failed to generate PDF. Please try again.');
+            toast.dismiss(loadingToastId);
+            toast.error(error.response?.data?.message || 'Failed to generate PDF. Please try again.', {
+                position: "top-right",
+                autoClose: 5000,
+            });
         } finally {
             setIsGenerating(false);
         }
@@ -256,7 +277,6 @@ export default function SefPrintButtonModal({
                                     School Year: {schoolYearLabel}
                                 </p>
                             )}
-                            
                         </div>
                         <button
                             onClick={onClose}
@@ -283,12 +303,6 @@ export default function SefPrintButtonModal({
                         </div>
                     )}
 
-                    {error && (
-                        <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700 border border-red-200">
-                            {error}
-                        </div>
-                    )}
-
                     {/* Select All Button */}
                     {!isLoadingDetails && facultyWithData.length > 0 && (
                         <div className="mb-4 flex items-center justify-between">
@@ -299,7 +313,7 @@ export default function SefPrintButtonModal({
                                 {selectedCount === totalWithData ? 'Deselect All' : 'Select All'}
                             </button>
                             <span className="text-xs text-slate-500">
-                                {selectedCount} of {totalWithData} selected on this page
+                                {selectedCount} of {totalWithData} selected
                             </span>
                         </div>
                     )}

@@ -1,8 +1,10 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import axios from 'axios';
 import AppLayout from '../Layouts/AppLayout';
-import { router, Link } from '@inertiajs/react'; // Add Link import
+import { router, Link } from '@inertiajs/react';
 import FacultyReportPageModal from '../modals/FacultyReportPageModal';
+import FacultySETPrintModal from '../modals/FacultySETPrintModal';
+import FacultySEFPrintModal from '../modals/FacultySEFPrintModal';
 
 export default function FacultySubjectReportPage({
     appName = 'FIMS',
@@ -28,6 +30,35 @@ export default function FacultySubjectReportPage({
     const [breakdownData, setBreakdownData] = useState(null);
     const [modalLoading, setModalLoading] = useState(false);
     const [modalError, setModalError] = useState('');
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [isSetPrintModalOpen, setIsSetPrintModalOpen] = useState(false);
+    const [isSefPrintModalOpen, setIsSefPrintModalOpen] = useState(false);
+    
+    const dropdownRef = useRef(null);
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsDropdownOpen(false);
+            }
+        };
+        
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    // Close dropdown on escape key
+    useEffect(() => {
+        const handleEscKey = (event) => {
+            if (event.key === 'Escape' && isDropdownOpen) {
+                setIsDropdownOpen(false);
+            }
+        };
+        
+        document.addEventListener('keydown', handleEscKey);
+        return () => document.removeEventListener('keydown', handleEscKey);
+    }, [isDropdownOpen]);
 
     const handleSchoolYearChange = useCallback((event) => {
         const newSchoolYear = event.target.value;
@@ -48,7 +79,6 @@ export default function FacultySubjectReportPage({
         setModalError('');
 
         try {
-            // Use the breakdown_url from the subject data
             const url = new URL(subject.breakdown_url, window.location.origin);
             if (selectedSchoolYear) {
                 url.searchParams.set('term', selectedSchoolYear);
@@ -75,9 +105,22 @@ export default function FacultySubjectReportPage({
         setModalError('');
     };
 
+    const facultyIdNo = user?.id_no ?? '';
+    const facultyName = user ? `${user.firstname ?? ''} ${user.lastname ?? ''}`.trim() : '';
+
     const selectedSchoolYearLabel = schoolYears.find(
         (option) => String(option.value) === String(selectedSchoolYear)
     )?.label ?? 'All School Years';
+
+    const subjectsForPrint = facultySubjects.map((subject, index) => ({
+        id: `${subject.course_code}-${subject.class_section || index}`,
+        course_code: subject.course_code,
+        course_description: subject.course_title,
+        year_section: subject.class_section,
+        term_id: selectedSchoolYear,
+        instructor_id: facultyIdNo,
+        title: subject.course_title,
+    }));
 
     const completeReportSummary = useMemo(() => {
         const hasAverageSef = reportSummary.some(
@@ -140,28 +183,6 @@ export default function FacultySubjectReportPage({
                     </span>
                 </div>
                 
-                {/* <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-slate-600">SEF Score</span>
-                    <span className={`text-xs font-semibold ${
-                        subject.sef_score !== null ? 'text-emerald-600' : 'text-slate-400'
-                    }`}>
-                        {subject.sef_score_formatted}
-                    </span>
-                </div> */}
-                
-                {/* <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-slate-600">Status</span>
-                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                        subject.final_grade !== null
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : subject.sef_score !== null
-                            ? 'bg-blue-100 text-blue-700'
-                            : 'bg-amber-100 text-amber-700'
-                    }`}>
-                        {subject.status}
-                    </span>
-                </div> */}
-                
                 {subject.final_grade !== null && (
                     <div className="mt-2 pt-2 border-t border-slate-100">
                         <div className="flex items-center justify-between">
@@ -190,7 +211,7 @@ export default function FacultySubjectReportPage({
             hasPendingEvaluations={hasPendingEvaluations}
         >
             <main className="flex-1 overflow-y-auto">
-                {/* Breadcrumbs - same style as FacultyReportPage */}
+                {/* Breadcrumbs */}
                 <div className="h-16 bg-white border-b border-slate-200 flex items-center px-6">
                     <div className="text-sm text-slate-500 flex items-center gap-2">
                         <Link href={dashboardUrl} className="hover:text-slate-700">Home</Link>
@@ -203,9 +224,79 @@ export default function FacultySubjectReportPage({
 
                 {/* Main content area with padding */}
                 <div className="p-6">
-                    <div className="mb-6">
-                        <h1 className="text-2xl font-semibold tracking-tight">My Subjects</h1>
-                        <p className="mt-1 text-sm text-slate-500">View your subject evaluations and ratings.</p>
+                    <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div>
+                            <h1 className="text-2xl font-semibold tracking-tight">My Subjects</h1>
+                            <p className="mt-1 text-sm text-slate-500">View your subject evaluations and ratings.</p>
+                        </div>
+
+                        {/* Improved Print Dropdown */}
+                        <div className="relative" ref={dropdownRef}>
+                            <button
+                                type="button"
+                                onClick={() => setIsDropdownOpen((prev) => !prev)}
+                                className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-all duration-200 hover:from-blue-700 hover:to-blue-800 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                            >
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                </svg>
+                                Print Reports
+                                <svg 
+                                    className={`h-4 w-4 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} 
+                                    fill="none" 
+                                    stroke="currentColor" 
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </button>
+
+                            {isDropdownOpen && (
+                                <div className="absolute right-0 mt-2 w-56 origin-top-right animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <div className="rounded-xl border border-slate-200 bg-white shadow-xl overflow-hidden">
+                                        <div className="p-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setIsSefPrintModalOpen(true);
+                                                    setIsDropdownOpen(false);
+                                                }}
+                                                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-slate-700 transition-colors hover:bg-blue-50 group"
+                                            >
+                                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 group-hover:bg-emerald-200 transition-colors">
+                                                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                    </svg>
+                                                </div>
+                                                <div>
+                                                    <p className="font-medium">SEF Report</p>
+                                                    <p className="text-xs text-slate-400">Supervisor evaluation form</p>
+                                                </div>
+                                            </button>
+                                            
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setIsSetPrintModalOpen(true);
+                                                    setIsDropdownOpen(false);
+                                                }}
+                                                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-slate-700 transition-colors hover:bg-blue-50 group"
+                                            >
+                                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-600 group-hover:bg-blue-200 transition-colors">
+                                                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                    </svg>
+                                                </div>
+                                                <div>
+                                                    <p className="font-medium">SET Report</p>
+                                                    <p className="text-xs text-slate-400">Student evaluation of teaching</p>
+                                                </div>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     {/* Report Summary Cards */}
@@ -276,7 +367,7 @@ export default function FacultySubjectReportPage({
                         </div>
                     </section>
 
-                    {/* Modal for Breakdown */}
+                    {/* Modals */}
                     <FacultyReportPageModal
                         isOpen={isModalOpen}
                         onClose={closeModal}
@@ -287,7 +378,25 @@ export default function FacultySubjectReportPage({
                         errorMessage={modalError}
                         instructorId={user?.id_no}
                         termId={selectedSchoolYear}
-                        facultyName={user ? `${user.firstname} ${user.lastname}` : ''}
+                        facultyName={facultyName}
+                    />
+
+                    <FacultySETPrintModal
+                        isOpen={isSetPrintModalOpen}
+                        onClose={() => setIsSetPrintModalOpen(false)}
+                        subjects={subjectsForPrint}
+                        facultyName={facultyName}
+                        facultyIdNo={facultyIdNo}
+                        term={selectedSchoolYear}
+                    />
+
+                    <FacultySEFPrintModal
+                        isOpen={isSefPrintModalOpen}
+                        onClose={() => setIsSefPrintModalOpen(false)}
+                        facultyIdNo={facultyIdNo}
+                        facultyName={facultyName}
+                        term={selectedSchoolYear}
+                        schoolYearLabel={selectedSchoolYearLabel}
                     />
                 </div>
             </main>

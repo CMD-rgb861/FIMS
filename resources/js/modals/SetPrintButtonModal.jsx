@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { toast } from 'react-toastify';
 
 export default function SetPrintButtonModal({ 
     isOpen, 
@@ -11,7 +12,6 @@ export default function SetPrintButtonModal({
 }) {
     const [selectedSubjects, setSelectedSubjects] = useState([]);
     const [isGenerating, setIsGenerating] = useState(false);
-    const [error, setError] = useState('');
     const [subjectsWithSubmissions, setSubjectsWithSubmissions] = useState([]);
     const [isLoadingDetails, setIsLoadingDetails] = useState(false);
 
@@ -24,7 +24,6 @@ export default function SetPrintButtonModal({
 
     const fetchAllSubmissionsData = async () => {
         setIsLoadingDetails(true);
-        setError('');
         
         try {
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
@@ -121,7 +120,10 @@ export default function SetPrintButtonModal({
             setSubjectsWithSubmissions(subjectsWithData);
         } catch (err) {
             console.error('Error fetching subject data:', err);
-            setError('Failed to load submission data. Please try again.');
+            toast.error('Failed to load submission data. Please try again.', {
+                position: "top-right",
+                autoClose: 5000,
+            });
             const subjectsWithDefault = subjects.map(subject => ({
                 ...subject,
                 students: [],
@@ -138,7 +140,6 @@ export default function SetPrintButtonModal({
         if (!isOpen) {
             setSelectedSubjects([]);
             setSubjectsWithSubmissions([]);
-            setError('');
             setIsGenerating(false);
         }
     }, [isOpen]);
@@ -161,17 +162,30 @@ export default function SetPrintButtonModal({
 
     const handleGeneratePDF = async () => {
         if (selectedSubjects.length === 0) {
-            setError('Please select at least one subject to print.');
+            toast.error('Please select at least one subject to print.', {
+                position: "top-right",
+                autoClose: 3000,
+            });
             return;
         }
 
-        setError('');
         setIsGenerating(true);
+
+        const loadingToastId = toast.loading(`Generating SET PDF for ${selectedSubjects.length} subject(s)...`, {
+            position: "top-right",
+        });
 
         try {
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
             
             const selectedSubjectsData = subjectsWithSubmissions.filter(s => selectedSubjects.includes(s.id));
+            
+            const totalStudents = selectedSubjectsData.reduce((total, subject) => total + (subject.total_students || 0), 0);
+            
+            toast.update(loadingToastId, {
+                render: `Generating PDF with ${totalStudents} evaluation pages...`,
+                isLoading: true,
+            });
             
             const response = await axios.post('/student-evaluation/pdf/batch-generate', {
                 faculty_id: String(facultyIdNo),
@@ -184,20 +198,43 @@ export default function SetPrintButtonModal({
                     'X-CSRF-TOKEN': csrfToken || '',
                     'Accept': 'application/json'
                 },
-                timeout: 300000 // 5 minute timeout for large PDFs
+                timeout: 600000
             });
 
             const pdfUrl = response.data.pdf_url;
             
             if (pdfUrl) {
+                toast.dismiss(loadingToastId);
+                
                 window.open(pdfUrl, '_blank');
+                
+                toast.success(`${selectedSubjects.length} subject(s), ${totalStudents} evaluation(s) - PDF opening...`, {
+                    position: "top-right",
+                    autoClose: 3000,
+                });
                 onClose();
             } else {
-                setError('Failed to generate PDF. Please try again.');
+                toast.dismiss(loadingToastId);
+                toast.error('Failed to generate PDF. Please try again.', {
+                    position: "top-right",
+                    autoClose: 5000,
+                });
             }
         } catch (error) {
             console.error('Error generating PDF:', error);
-            setError(error.response?.data?.message || 'Failed to generate PDF. Please try again.');
+            toast.dismiss(loadingToastId);
+            
+            if (error.code === 'ECONNABORTED') {
+                toast.error('PDF generation is taking too long. Please select fewer subjects or try again.', {
+                    position: "top-right",
+                    autoClose: 5000,
+                });
+            } else {
+                toast.error(error.response?.data?.message || 'Failed to generate PDF. Please try again.', {
+                    position: "top-right",
+                    autoClose: 5000,
+                });
+            }
         } finally {
             setIsGenerating(false);
         }
@@ -246,12 +283,6 @@ export default function SetPrintButtonModal({
                                 </svg>
                                 Loading student submissions...
                             </div>
-                        </div>
-                    )}
-
-                    {error && (
-                        <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700 border border-red-200">
-                            {error}
                         </div>
                     )}
 

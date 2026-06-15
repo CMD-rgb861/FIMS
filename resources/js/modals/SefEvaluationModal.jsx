@@ -1,12 +1,11 @@
 import React, { useMemo, useRef, useState } from 'react';
+import { toast } from 'react-toastify';
 
 export default function SefEvaluationModal({ isOpen, evaluation, submitUrl = '/evaluations', csrfToken = '', onClose, onSubmitted }) {
     const [ratings, setRatings] = useState({});
     const [comments, setComments] = useState('');
     const [currentStep, setCurrentStep] = useState(1);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [submitError, setSubmitError] = useState('');
-    const [submitSuccess, setSubmitSuccess] = useState('');
     const benchmarkSectionRef = useRef(null);
 
     const ratingScale = useMemo(() => ([
@@ -140,8 +139,6 @@ export default function SefEvaluationModal({ isOpen, evaluation, submitUrl = '/e
 
     const handleRatingChange = (benchmarkId, value) => {
         setRatings((prev) => ({ ...prev, [benchmarkId]: value }));
-        setSubmitError('');
-        setSubmitSuccess('');
     };
 
     const handleNext = () => {
@@ -160,7 +157,10 @@ export default function SefEvaluationModal({ isOpen, evaluation, submitUrl = '/e
 
     const handleSubmit = async () => {
         if (!canSubmitAllRatings || isSubmitting) {
-            setSubmitError('Please complete all ratings before submitting.');
+            toast.error('Please complete all ratings before submitting.', {
+                position: "top-right",
+                autoClose: 3000,
+            });
             return;
         }
 
@@ -171,13 +171,19 @@ export default function SefEvaluationModal({ isOpen, evaluation, submitUrl = '/e
         const evaluatedUserId = evaluation.evaluated_user_id ?? evaluation.user_id;
 
         if (!instructorIdNo) {
-            setSubmitError('Unable to determine instructor ID. Please refresh and try again.');
+            toast.error('Unable to determine instructor ID. Please refresh and try again.', {
+                position: "top-right",
+                autoClose: 3000,
+            });
             return;
         }
 
         setIsSubmitting(true);
-        setSubmitError('');
-        setSubmitSuccess('');
+
+        // Show loading toast
+        const loadingToastId = toast.loading('Submitting evaluation...', {
+            position: "top-right",
+        });
 
         try {
             const response = await fetch(submitUrl, {
@@ -225,7 +231,21 @@ export default function SefEvaluationModal({ isOpen, evaluation, submitUrl = '/e
             const submittedTotal = submittedScores.reduce((sum, item) => sum + item.score, 0);
             const submittedRating = Number(((submittedTotal / 75) * 100).toFixed(2));
 
-            setSubmitSuccess('Evaluation submitted successfully.');
+            // Dismiss loading toast and show success
+            toast.dismiss(loadingToastId);
+            toast.success(
+                <div>
+                    <strong>Evaluation submitted successfully!</strong>
+                    <div className="mt-1 text-xs opacity-90">
+                        Rating: {submittedRating}%
+                    </div>
+                </div>,
+                {
+                    position: "top-right",
+                    autoClose: 5000,
+                }
+            );
+
             onSubmitted?.({
                 instructor: evaluation.instructor,
                 evaluation_result: {
@@ -238,11 +258,16 @@ export default function SefEvaluationModal({ isOpen, evaluation, submitUrl = '/e
                     rating_percentage: submittedRating,
                 },
             });
+            
             setTimeout(() => {
                 handleClose();
-            }, 500);
+            }, 1500);
         } catch (error) {
-            setSubmitError(error.message || 'Unable to submit evaluation. Please try again.');
+            toast.dismiss(loadingToastId);
+            toast.error(error.message || 'Unable to submit evaluation. Please try again.', {
+                position: "top-right",
+                autoClose: 5000,
+            });
         } finally {
             setIsSubmitting(false);
         }
@@ -252,8 +277,6 @@ export default function SefEvaluationModal({ isOpen, evaluation, submitUrl = '/e
         setRatings({});
         setComments('');
         setCurrentStep(1);
-        setSubmitError('');
-        setSubmitSuccess('');
         onClose?.();
     };
 
@@ -294,14 +317,14 @@ export default function SefEvaluationModal({ isOpen, evaluation, submitUrl = '/e
                                     {evaluation.college || 'N/A'} {evaluation.program ? `- ${evaluation.program}` : ''}
                                 </p>
                             </div>
-                            <div>
+                            {/* <div>
                                 <p className="text-[10px] text-slate-500 sm:text-[11px]">Course Code/Title</p>
                                 <p className="mt-0.5 pb-1 text-xs font-bold text-slate-900 sm:text-sm">{evaluation.code} - {evaluation.title}</p>
                             </div>
                             <div>
                                 <p className="text-[10px] text-slate-500 sm:text-[11px]">Program Level</p>
                                 <p className="mt-0.5 pb-1 text-xs font-bold text-slate-900 sm:text-sm">Year 3</p>
-                            </div>
+                            </div> */}
                             <div className="sm:col-span-2">
                                 <p className="text-[10px] text-slate-500 sm:text-[11px]">Semester or Term/Academic Year</p>
                                 <p className="mt-0.5 pb-1 text-xs font-bold text-slate-900 sm:text-sm">{evaluation.term}</p>
@@ -329,7 +352,7 @@ export default function SefEvaluationModal({ isOpen, evaluation, submitUrl = '/e
                                         </tr>
                                     ))}
                                 </tbody>
-                            </table>
+                             </table>
                         </div>
                     </section>
 
@@ -435,18 +458,6 @@ export default function SefEvaluationModal({ isOpen, evaluation, submitUrl = '/e
                     {!canProceedNext && currentStep <= 3 && (
                         <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                             Please answer all items in this section before proceeding.
-                        </div>
-                    )}
-
-                    {submitError && (
-                        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                            {submitError}
-                        </div>
-                    )}
-
-                    {submitSuccess && (
-                        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                            {submitSuccess}
                         </div>
                     )}
                 </div>
