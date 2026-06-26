@@ -16,10 +16,18 @@ use App\Http\Controllers\AnswerController;
 use App\Http\Controllers\Forms\SupervisorEvaluationPDF;
 use App\Http\Controllers\Forms\StudentEvaluationPDF;
 use App\Http\Controllers\Forms\BatchPDFController;
+use App\Http\Controllers\Auth\SsoController;
 
-Route::get('/', function () {
-    return redirect()->route('login');
-});
+Route::get('/sso/validate', [SsoController::class, 'validateToken'])
+    ->name('sso.validate');
+
+// ===== EXISTING ROUTES =====
+// Route::get('/', function () {
+//     return redirect()->route('login');
+// });
+Route::get('login', function () {
+    return redirect()->away('https://10.5.70.45/ids/fims/home/n');
+})->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
