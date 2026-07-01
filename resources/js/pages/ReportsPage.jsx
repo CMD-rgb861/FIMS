@@ -745,7 +745,7 @@ export default function ReportsPage({
                                 
                                 {(!facultyList.data || facultyList.data.length === 0) && !isLoading && (
                                     <div className="text-center py-12">
-                                        <p className="text-slate-500">No faculty found matching your search.</p>
+                                        <p className="text-slate-500">No faculty found.</p>
                                     </div>
                                 )}
                             </div>

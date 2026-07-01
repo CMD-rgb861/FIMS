@@ -177,8 +177,7 @@ class ReportsController extends Controller
         }
 
         $facultyList = $paginatedFaculty
-            ->map(function ($faculty, $index) use ($evaluatedInstructors, $sefAveragesByIdNo, $paginatedSetRatings, $offset) {
-                // REMOVED $termId from use() since it's not needed in the closure
+            ->map(function ($faculty, $index) use ($evaluatedInstructors, $sefAveragesByIdNo, $paginatedSetRatings, $offset, $termId) {
 
                 $subjectsCount = (int) ($faculty['subjects_count'] ?? 0);
 
@@ -206,7 +205,8 @@ class ReportsController extends Controller
                         ?? 'EMP-' . str_pad((string) ($offset + $index + 1), 3, '0', STR_PAD_LEFT),
 
                     'detail_url' => route('reports.faculty', [
-                        'instructor' => $faculty['id_no']
+                        'instructor' => $faculty['id_no'],
+                        'term' => $termId,
                     ]),
 
                     'overall_set_rating' => $overallSetRating !== null ? round($overallSetRating, 2) : null,
@@ -217,7 +217,7 @@ class ReportsController extends Controller
             ->all();
 
         $facultyListAll = $facultyCollection
-            ->map(function ($faculty, $index) use ($evaluatedInstructors, $sefAveragesByIdNo, $batchSetRatings) {
+            ->map(function ($faculty, $index) use ($evaluatedInstructors, $sefAveragesByIdNo, $batchSetRatings, $termId) {
                 $subjectsCount = (int) ($faculty['subjects_count'] ?? 0);
 
                 $overallSetRating = null;
@@ -238,7 +238,8 @@ class ReportsController extends Controller
                     'evaluated' => $evaluatedInstructors->contains($faculty['instructor']),
                     'employee_id_no' => $faculty['id_no'] ?? 'EMP-' . str_pad((string) ($index + 1), 3, '0', STR_PAD_LEFT),
                     'detail_url' => route('reports.faculty', [
-                        'instructor' => $faculty['id_no']
+                        'instructor' => $faculty['id_no'],
+                        'term' => $termId,
                     ]),
                     'overall_set_rating' => $overallSetRating !== null ? round($overallSetRating, 2) : null,
                     'overall_sef_rating' => $overallSefRating,
@@ -341,6 +342,14 @@ class ReportsController extends Controller
         $facultyIndex = $facultyCollection->search(function ($faculty) use ($instructor) {
             return strcasecmp($faculty['id_no'], $instructor) === 0;
         });
+
+        if ($facultyIndex === false) {
+            $fallbackFacultyEvaluations = $this->getLocalFacultyUsers($currentUser, null);
+            $facultyCollection = collect($fallbackFacultyEvaluations);
+            $facultyIndex = $facultyCollection->search(function ($faculty) use ($instructor) {
+                return strcasecmp($faculty['id_no'], $instructor) === 0;
+            });
+        }
 
         abort_if($facultyIndex === false, 404);
 

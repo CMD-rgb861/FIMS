@@ -168,6 +168,10 @@ export default function FacultyReportPage({
         employee_name: row.employee_name,
     }));
 
+    const emptyStateMessage = selectedSchoolYear
+        ? 'No evaluation records found for this faculty in the selected school year.'
+        : 'No evaluation records found for this faculty.';
+
     return (
         <AppLayout
             user={user}
@@ -338,7 +342,7 @@ export default function FacultyReportPage({
                                             colSpan={5}
                                             className="px-5 py-8 text-center text-slate-500"
                                         >
-                                            No evaluation records found for this faculty.
+                                            {emptyStateMessage}
                                         </td>
                                     </tr>
                                 )}
