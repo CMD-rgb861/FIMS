@@ -21,6 +21,14 @@ use App\Http\Controllers\Auth\SsoController;
 Route::get('/sso/validate', [SsoController::class, 'validateToken'])
     ->name('sso.validate');
 
+Route::get('/whereami', function () {
+    return [
+        'app_name' => config('app.name'),
+        'database' => config('database.connections.mysql.database'),
+        'base_path' => base_path(),
+    ];
+});
+
 // ===== EXISTING ROUTES =====
 // Route::get('/', function () {
 //     return redirect()->route('login');
