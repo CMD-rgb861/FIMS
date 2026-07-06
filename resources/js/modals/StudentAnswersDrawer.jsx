@@ -194,11 +194,11 @@ export default function StudentAnswersDrawer({
                             </p>
                         </div>
                         <div className="flex items-center gap-3">
-                            {!isEditMode && (
+                            {/* {!isEditMode && (
                                 <PrimaryButton onClick={handleEdit}>
                                     Edit
                                 </PrimaryButton>
-                            )}
+                            )} */}
                             <SecondaryButton onClick={handleCloseButtonClick}>
                                 Close
                             </SecondaryButton>
