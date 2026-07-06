@@ -25,7 +25,10 @@ Route::get('/whereami', function () {
     return [
         'app_name' => config('app.name'),
         'database' => config('database.connections.mysql.database'),
-        'base_path' => base_path(),
+        'env_exists' => file_exists(base_path('.env')),
+        'env_path' => base_path('.env'),
+        'app_env' => env('APP_NAME'),
+        'db_env' => env('DB_DATABASE'),
     ];
 });
 
