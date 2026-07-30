@@ -18,6 +18,7 @@ class User extends Authenticatable
         'lastname',
         'firstname',
         'middlename',
+        'academic_rank',
         'extname',
         'password',
         'unit_id',
@@ -35,6 +36,7 @@ class User extends Authenticatable
         return [
             'password' => 'hashed',
             'is_admin' => 'boolean',
+            'academic_rank' => 'string',
         ];
     }
 

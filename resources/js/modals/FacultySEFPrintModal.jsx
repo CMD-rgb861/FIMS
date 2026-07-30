@@ -97,8 +97,8 @@ export default function FacultySEFPrintModal({
                     faculty_list: [{ 
                         employee_id_no: facultyIdNo, 
                         instructor: facultyName,
-                        ratings_breakdown: sefSummary?.ratings_breakdown || null,
-                        comments: sefSummary?.comments || ''
+                        // ratings_breakdown: sefSummary?.ratings_breakdown || null,
+                        // comments: sefSummary?.comments || ''
                     }],
                     school_year_label: schoolYearLabel,
                 },

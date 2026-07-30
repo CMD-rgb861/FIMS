@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\FacultyDevelopmentForm;
 use App\Models\SupervisorEvaluationSubmission;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -163,6 +164,10 @@ class FacultyEvaluationController extends Controller
                     'rating_percentage' => $submission->rating_percentage,
                     'total_score'       => $submission->total_score,
                     'max_score'         => $submission->max_score,
+                    'feda_submitted'    => FacultyDevelopmentForm::hasSubmittedFormFor(
+                        $submission->instructor_id_no,
+                        $termId
+                    ),
                 ],
             ], 201);
 
@@ -200,6 +205,10 @@ class FacultyEvaluationController extends Controller
                     'comments'          => $submission->comments,
                     'submitted_at'      => $submission->submitted_at,
                     'status'            => $submission->status,
+                    'feda_submitted'    => FacultyDevelopmentForm::hasSubmittedFormFor(
+                        $submission->instructor_id_no,
+                        $submission->term_id
+                    ),
                     'answers'           => $submission->answers->map(function ($answer) {
                         return [
                             'question_key' => $answer->question_key,
@@ -234,6 +243,10 @@ class FacultyEvaluationController extends Controller
                 'comments'          => $submission->comments,
                 'submitted_at'      => $submission->submitted_at,
                 'status'            => $submission->status,
+                'feda_submitted'    => FacultyDevelopmentForm::hasSubmittedFormFor(
+                    $submission->instructor_id_no,
+                    $submission->term_id
+                ),
                 'created_at'        => $submission->created_at,
                 'updated_at'        => $submission->updated_at,
                 'answers'           => $submission->answers->map(function ($answer) {

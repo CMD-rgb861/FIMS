@@ -201,6 +201,7 @@ export default function SefEvaluationModal({ isOpen, evaluation, submitUrl = '/e
                     course_code: safeCourseCode,
                     course_title: safeCourseTitle,
                     term: safeTerm,
+                    term_id: evaluation.term_id || evaluation.school_year_id, // ← ADD THIS
                     ratings,
                     comments: comments.trim() || null,
                 }),

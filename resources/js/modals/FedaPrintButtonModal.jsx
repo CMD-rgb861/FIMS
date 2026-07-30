@@ -3,36 +3,60 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 
 // Memoized row component to prevent re-renders
-const FacultyRow = React.memo(({ faculty, isSelected, onToggle, isLoadingDetails }) => (
-    <tr className="hover:bg-slate-50">
-        <td className="px-4 py-3">
-            <input
-                type="checkbox"
-                checked={isSelected}
-                onChange={() => onToggle(faculty.employee_id_no)}
-                disabled={isLoadingDetails || !faculty.has_sef_data}
-                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
-            />
-        </td>
-        <td className="px-4 py-3 text-sm text-slate-700 font-medium">
-            {faculty.instructor || '-'}
-        </td>
-        <td className="px-4 py-3 text-sm text-slate-600">
-            {faculty.employee_id_no || '-'}
-        </td>
-        <td className="px-4 py-3 text-sm text-slate-600 text-center font-semibold">
-            {faculty.overall_sef_rating ? (
-                <span className="text-emerald-600 font-bold">
-                    {Number(faculty.overall_sef_rating).toFixed(2)}%
-                </span>
-            ) : (
-                <span className="text-slate-400">—</span>
-            )}
-        </td>
-    </tr>
-));
+const FacultyRow = React.memo(({ faculty, isSelected, onToggle, isLoadingDetails }) => {
+    // Faculty must have complete SET/SEF data AND FEDA must be submitted
+    // Backend now includes feda_submitted in has_complete_data
+    const isSelectable = faculty.has_complete_data === true;
+    
+    return (
+        <tr className="hover:bg-slate-50">
+            <td className="px-4 py-3">
+                <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => onToggle(faculty.employee_id_no)}
+                    disabled={isLoadingDetails || !isSelectable}
+                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                />
+            </td>
+            <td className="px-4 py-3 text-sm text-slate-700 font-medium">
+                {faculty.instructor || '-'}
+            </td>
+            <td className="px-4 py-3 text-sm text-slate-600">
+                {faculty.employee_id_no || '-'}
+            </td>
+            <td className="px-4 py-3 text-sm text-slate-600 text-center font-semibold">
+                {faculty.overall_set_rating ? (
+                    <span className="text-blue-600 font-bold">
+                        {Number(faculty.overall_set_rating).toFixed(2)}%
+                    </span>
+                ) : (
+                    <span className="text-slate-400">—</span>
+                )}
+            </td>
+            <td className="px-4 py-3 text-sm text-slate-600 text-center font-semibold">
+                {faculty.overall_sef_rating ? (
+                    <span className="text-emerald-600 font-bold">
+                        {Number(faculty.overall_sef_rating).toFixed(2)}%
+                    </span>
+                ) : (
+                    <span className="text-slate-400">—</span>
+                )}
+            </td>
+            <td className="px-4 py-3 text-sm text-slate-600 text-center font-semibold">
+                {faculty.feda_submitted ? (
+                    <span className="text-indigo-600 font-bold">
+                        ✓ Submitted
+                    </span>
+                ) : (
+                    <span className="text-slate-400">—</span>
+                )}
+            </td>
+        </tr>
+    );
+});
 
-export default function SefPrintButtonModal({ 
+export default function FedaPrintButtonModal({ 
     isOpen, 
     onClose, 
     facultyList = [],
@@ -97,10 +121,16 @@ export default function SefPrintButtonModal({
                 return {
                     ...faculty,
                     overall_sef_rating: data.overall_sef_rating || faculty.overall_sef_rating || null,
+                    overall_set_rating: data.overall_set_rating || faculty.overall_set_rating || null,
                     sef_details: data.details || null,
+                    set_details: data.set_details || null,
                     ratings_breakdown: data.ratings_breakdown || data.details?.ratings_breakdown,
                     comments: data.comments || '',
-                    has_sef_data: data.has_data || false,
+                    has_sef_data: data.has_sef_data || false,
+                    has_set_data: data.has_set_data || false,
+                    has_feda_data: data.has_feda_data || false,
+                    feda_submitted: data.feda_submitted || false,
+                    has_complete_data: data.has_complete_data || false,
                     total_evaluators: data.total_evaluators || 0,
                     error: data.error || null
                 };
@@ -119,9 +149,14 @@ export default function SefPrintButtonModal({
             });
             const fallbackData = effectiveFacultyList.map(f => ({ 
                 ...f, 
-                has_sef_data: false, 
+                has_sef_data: false,
+                has_set_data: false,
+                has_feda_data: false,
+                feda_submitted: false,
+                has_complete_data: false,
                 total_evaluators: 0,
-                overall_sef_rating: null
+                overall_sef_rating: null,
+                overall_set_rating: null
             }));
             setFacultyWithSef(fallbackData);
             setSearchResults(fallbackData);
@@ -229,11 +264,15 @@ export default function SefPrintButtonModal({
     }, []);
 
     const handleSelectAll = useCallback(() => {
-        const facultyWithData = searchResults.filter(f => f.has_sef_data);
+        // Only select faculty that have complete data (SET + SEF + FEDA submitted)
+        // Backend now includes feda_submitted in has_complete_data
+        const facultyWithCompleteData = searchResults.filter(f => 
+            f.has_complete_data === true
+        );
         setSelectedFaculty(prev => 
-            prev.length === facultyWithData.length 
+            prev.length === facultyWithCompleteData.length 
                 ? [] 
-                : facultyWithData.map(f => f.employee_id_no)
+                : facultyWithCompleteData.map(f => f.employee_id_no)
         );
     }, [searchResults]);
 
@@ -248,7 +287,7 @@ export default function SefPrintButtonModal({
 
         setIsGenerating(true);
 
-        const loadingToastId = toast.loading(`Generating SEF PDF for ${selectedFaculty.length} faculty member(s)...`, {
+        const loadingToastId = toast.loading(`Generating FEDA PDF for ${selectedFaculty.length} faculty member(s)...`, {
             position: "top-right",
         });
 
@@ -266,10 +305,15 @@ export default function SefPrintButtonModal({
                     ratings_breakdown: faculty.ratings_breakdown || faculty.sef_details?.ratings_breakdown,
                     comments: faculty.comments || '',
                     evaluator_name: '',
-                    evaluator_id: ''
+                    evaluator_id: '',
+                    // Include FEDA data for the PDF
+                    areas_for_improvement: faculty.areas_for_improvement || '',
+                    proposed_activities: faculty.proposed_activities || '',
+                    action_plan: faculty.action_plan || ''
                 }));
             
-            const response = await axios.post('/sef/pdf/generate', {
+            // Use the FEDA PDF generation endpoint
+            const response = await axios.post('/feda/pdf/generate', {
                 term_id: String(selectedSchoolYear),
                 faculty_list: selectedFacultyData,
                 school_year_label: schoolYearLabel
@@ -287,7 +331,7 @@ export default function SefPrintButtonModal({
             if (pdfUrl) {
                 toast.dismiss(loadingToastId);
                 window.open(pdfUrl, '_blank');
-                toast.success(`PDF generated successfully! ${selectedFaculty.length} faculty report(s) opening...`, {
+                toast.success(`FEDA PDF generated successfully! ${selectedFaculty.length} faculty report(s) opening...`, {
                     position: "top-right",
                     autoClose: 3000,
                 });
@@ -300,7 +344,7 @@ export default function SefPrintButtonModal({
                 });
             }
         } catch (error) {
-            console.error('Error generating PDF:', error);
+            console.error('Error generating FEDA PDF:', error);
             toast.dismiss(loadingToastId);
             toast.error(error.response?.data?.message || 'Failed to generate PDF. Please try again.', {
                 position: "top-right",
@@ -311,12 +355,13 @@ export default function SefPrintButtonModal({
         }
     }, [selectedFaculty, facultyWithSef, selectedSchoolYear, schoolYearLabel, onClose]);
 
-    // Memoized computed values
+    // Memoized computed values - only faculty with complete data (SET + SEF + FEDA submitted)
+    // Backend now includes feda_submitted in has_complete_data
     const facultyWithData = useMemo(() => 
-        searchResults.filter(f => f.has_sef_data), 
+        searchResults.filter(f => f.has_complete_data === true), 
         [searchResults]
     );
-    
+        
     const selectedCount = selectedFaculty.length;
     const totalWithData = facultyWithData.length;
     
@@ -349,9 +394,9 @@ export default function SefPrintButtonModal({
                 <div className="border-b border-slate-200 px-5 py-4">
                     <div className="flex items-start justify-between">
                         <div>
-                            <h2 className="text-lg font-semibold text-slate-900">Print SEF Reports</h2>
+                            <h2 className="text-lg font-semibold text-slate-900">Print FEDA Reports</h2>
                             <p className="text-sm text-slate-600 mt-1">
-                                Select faculty members to generate SEF summary reports
+                                Select faculty members to generate Faculty Evaluation and Development Acknowledgement (FEDA) reports
                             </p>
                             {schoolYearLabel && (
                                 <p className="text-xs text-slate-500 mt-0.5">
@@ -379,7 +424,7 @@ export default function SefPrintButtonModal({
                                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                 </svg>
-                                Loading SEF data for faculty...
+                                Loading faculty data...
                             </div>
                         </div>
                     )}
@@ -456,7 +501,9 @@ export default function SefPrintButtonModal({
                                                 </th>
                                                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Faculty Name</th>
                                                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Employee ID</th>
+                                                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 text-center">Overall SET Rating</th>
                                                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 text-center">Overall SEF Rating</th>
+                                                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 text-center">FEDA Status</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-200 bg-white">
@@ -540,10 +587,23 @@ export default function SefPrintButtonModal({
                         )}
                     </div>
                     
-                    {/* Warning if no faculty have data */}
+                    {/* Warning if no faculty have complete data */}
                     {!isLoadingDetails && searchResults.length > 0 && totalWithData === 0 && (
                         <div className="mt-4 rounded-md bg-yellow-50 p-3 text-sm text-yellow-700 border border-yellow-200">
-                            No SEF data found for any faculty member in the selected school year.
+                            No faculty members have complete SET and SEF data with FEDA submitted for the selected school year. 
+                            Both SET and SEF data are required and FEDA must be submitted to generate FEDA reports.
+                        </div>
+                    )}
+                    
+                    {/* Show counts of incomplete data */}
+                    {!isLoadingDetails && searchResults.length > 0 && totalWithData > 0 && totalWithData < searchResults.length && (
+                        <div className="mt-4 rounded-md bg-blue-50 p-3 text-sm text-blue-700 border border-blue-200">
+                            {searchResults.length - totalWithData} faculty member(s) are not selectable because they are missing 
+                            {searchResults.some(f => !f.has_set_data) ? ' SET' : ''}
+                            {searchResults.some(f => !f.has_set_data) && searchResults.some(f => !f.has_sef_data) ? ' and/or' : ''}
+                            {searchResults.some(f => !f.has_sef_data) ? ' SEF' : ''} 
+                            {searchResults.some(f => !f.has_sef_data) && searchResults.some(f => !f.feda_submitted) ? ' and/or' : ''}
+                            {searchResults.some(f => !f.feda_submitted) ? ' FEDA submission' : ''} data.
                         </div>
                     )}
                 </div>
@@ -570,14 +630,14 @@ export default function SefPrintButtonModal({
                                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                 </svg>
-                                Generating PDF...
+                                Generating FEDA PDF...
                             </>
                         ) : (
                             <>
                                 <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                                 </svg>
-                                Print Selected SEF ({selectedCount})
+                                Print Selected FEDA ({selectedCount})
                             </>
                         )}
                     </button>

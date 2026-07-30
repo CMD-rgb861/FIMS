@@ -1,7 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import AppLayout from '../Layouts/AppLayout';
 import SefEvaluationModal from '../modals/SefEvaluationModal';
 import EvaluationResultModal from '../modals/EvaluationResultModal';
+import FEDAFormModal from '../modals/FEDAFormModal';
+import {router, Link} from '@inertiajs/react';
+import FEDAResultModal from '../modals/FEDAResultModal';
 import { isAdminRole } from '../utils/role';
 
 export default function EvaluationPage({
@@ -16,39 +19,215 @@ export default function EvaluationPage({
     csrfToken = '',
     user = null,
     schoolYears = [],
-    terms = [],
+    statusOptions = [],
+    units = [],
     subjects = [],
     evaluations = [],
     evaluatedInstructors = [],
     selectedSchoolYear = '',
     selectedTerm = 'all',
+    selectedUnit = '',
     selectedSubject = '',
+    searchQuery = '',
+    currentPage = 1,
+    totalEvaluations = 0,
+    lastPage = 1,
+    perPage = 10,
+    showUnitFilter = false,
     isEvaluationClosed = false,
     evaluationStatusLabel = 'Open for Evaluation',
     hasPendingEvaluations = false,
     reportsUrl = '/reports',
-    infoMessage = null,          // <-- new prop
+    infoMessage = null,
 }) {
     const isAdmin = user?.isAdmin === true || isAdminRole(user?.role);
     const [isEvaluationOpen, setIsEvaluationOpen] = useState(false);
     const [selectedEvaluation, setSelectedEvaluation] = useState(null);
     const [isResultOpen, setIsResultOpen] = useState(false);
     const [selectedResult, setSelectedResult] = useState(null);
-    const [selectedSchoolYearFilter, setSelectedSchoolYearFilter] = useState(selectedSchoolYear);
-    const [evaluationItems, setEvaluationItems] = useState(() => (
-        evaluations.map((item) => ({
-            ...item,
-            evaluated: item.evaluated || evaluatedInstructors.includes(item.instructor),
-        }))
-    ));
-
-    useEffect(() => {
-        setSelectedSchoolYearFilter(selectedSchoolYear);
-    }, [selectedSchoolYear]);
+    const [isFedaModalOpen, setIsFedaModalOpen] = useState(false);
+    const [selectedFedaFaculty, setSelectedFedaFaculty] = useState(null);
     
+    // Local state for all filter values - initialized with props
+    const [localSchoolYear, setLocalSchoolYear] = useState(selectedSchoolYear || '');
+    const [localTerm, setLocalTerm] = useState(selectedTerm || 'all');
+    const [localUnit, setLocalUnit] = useState(selectedUnit || '');
+    const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery || '');
+    const [localCurrentPage, setLocalCurrentPage] = useState(currentPage || 1);
+    const [isLoading, setIsLoading] = useState(false);
+    
+    const searchTimeoutRef = useRef(null);
+    const filterTimeoutRef = useRef(null);
+    const isFirstRender = useRef(true);
+
+    // Update local state when props change (from server/URL)
+    useEffect(() => {
+        if (isFirstRender.current) {
+            isFirstRender.current = false;
+            setIsLoading(false);
+            return;
+        }
+        
+        setLocalSchoolYear(selectedSchoolYear || '');
+        setLocalTerm(selectedTerm || 'all');
+        setLocalUnit(selectedUnit || '');
+        setLocalSearchQuery(searchQuery || '');
+        setLocalCurrentPage(currentPage || 1);
+        setIsLoading(false);
+    }, [selectedSchoolYear, selectedTerm, selectedUnit, searchQuery, currentPage]);
+
+    // Cleanup timeouts on unmount
+    useEffect(() => {
+        return () => {
+            if (searchTimeoutRef.current) {
+                clearTimeout(searchTimeoutRef.current);
+            }
+            if (filterTimeoutRef.current) {
+                clearTimeout(filterTimeoutRef.current);
+            }
+        };
+    }, []);
+
+    const startLoading = useCallback(() => {
+        setIsLoading(true);
+    }, []);
+
+    const stopLoading = useCallback(() => {
+        setIsLoading(false);
+    }, []);
+
+    // Debounced search
+    const debouncedSearch = useCallback((value) => {
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+        }
+        
+        startLoading();
+        
+        searchTimeoutRef.current = setTimeout(() => {
+            const params = new URLSearchParams();
+            
+            // Preserve all filter values
+            if (localSchoolYear) params.set('term', localSchoolYear);
+            if (localTerm && localTerm !== 'all') params.set('status', localTerm);
+            if (localUnit) params.set('unit', localUnit);
+            if (value) params.set('search', value);
+            params.set('page', '1');
+            
+            router.get(window.location.pathname, Object.fromEntries(params), {
+                preserveState: true,
+                preserveScroll: true,
+                replace: true,
+                onFinish: () => stopLoading(),
+                onError: () => stopLoading(),
+            });
+        }, 500);
+    }, [localSchoolYear, localTerm, localUnit, startLoading, stopLoading]);
+
+    // Handle search input change
+    const handleSearchChange = (e) => {
+        const value = e.target.value;
+        setLocalSearchQuery(value);
+        debouncedSearch(value);
+    };
+
+    // Handle filter changes with debouncing
+    const handleFilterChange = (e) => {
+        const { name, value } = e.target;
+        
+        // Update local state immediately for responsive UI
+        if (name === 'term') {
+            setLocalSchoolYear(value);
+        } else if (name === 'status') {
+            setLocalTerm(value);
+        } else if (name === 'unit') {
+            setLocalUnit(value);
+        }
+        
+        // Clear any pending filter timeout
+        if (filterTimeoutRef.current) {
+            clearTimeout(filterTimeoutRef.current);
+        }
+        
+        startLoading();
+        
+        filterTimeoutRef.current = setTimeout(() => {
+            const params = new URLSearchParams();
+            
+            // Get current values (use the new value for the changed filter)
+            const currentSchoolYear = name === 'term' ? value : localSchoolYear;
+            const currentTerm = name === 'status' ? value : localTerm;
+            const currentUnit = name === 'unit' ? value : localUnit;
+            const currentSearch = localSearchQuery;
+            
+            if (currentSchoolYear) params.set('term', currentSchoolYear);
+            if (currentTerm && currentTerm !== 'all') params.set('status', currentTerm);
+            if (currentUnit) params.set('unit', currentUnit);
+            if (currentSearch) params.set('search', currentSearch);
+            params.set('page', '1');
+            
+            router.get(window.location.pathname, Object.fromEntries(params), {
+                preserveState: true,
+                preserveScroll: true,
+                replace: true,
+                onFinish: () => stopLoading(),
+                onError: () => stopLoading(),
+            });
+        }, 300);
+    };
+
+    // Handle page change
+    const handlePageChange = (page) => {
+        if (page < 1 || page > lastPage) return;
+        
+        setLocalCurrentPage(page);
+        startLoading();
+        
+        const params = new URLSearchParams();
+        
+        if (localSchoolYear) params.set('term', localSchoolYear);
+        if (localTerm && localTerm !== 'all') params.set('status', localTerm);
+        if (localUnit) params.set('unit', localUnit);
+        if (localSearchQuery) params.set('search', localSearchQuery);
+        params.set('page', page.toString());
+        
+        router.get(window.location.pathname, Object.fromEntries(params), {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            onFinish: () => stopLoading(),
+            onError: () => stopLoading(),
+        });
+    };
+
+    // Handle clear search
+    const handleClearSearch = useCallback(() => {
+        setLocalSearchQuery('');
+        startLoading();
+        
+        const params = new URLSearchParams();
+        
+        if (localSchoolYear) params.set('term', localSchoolYear);
+        if (localTerm && localTerm !== 'all') params.set('status', localTerm);
+        if (localUnit) params.set('unit', localUnit);
+        params.set('page', '1');
+        
+        router.get(window.location.pathname, Object.fromEntries(params), {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            onFinish: () => stopLoading(),
+            onError: () => stopLoading(),
+        });
+    }, [localSchoolYear, localTerm, localUnit, startLoading, stopLoading]);
+
     const openEvaluationModal = (item) => {
         if (item.evaluated || isEvaluationClosed) return;
-        setSelectedEvaluation(item);
+        setSelectedEvaluation({
+            ...item,
+            term_id: item.school_year_id || parseInt(localSchoolYear, 10),
+            school_year_id: item.school_year_id || parseInt(localSchoolYear, 10),
+        });
         setIsEvaluationOpen(true);
     };
 
@@ -68,12 +247,168 @@ export default function EvaluationPage({
         setIsResultOpen(false);
     };
 
+    const openFedaModal = (item) => {
+        const isFedaSubmitted = item.feda_submitted || false;
+        setSelectedFedaFaculty({
+            ...item,
+            name: item.instructor,
+            id_no: item.id_no || item.instructor_id_no,
+            is_view_mode: isFedaSubmitted,
+        });
+        setIsFedaModalOpen(true);
+    };
+
+    const closeFedaModal = () => {
+        setSelectedFedaFaculty(null);
+        setIsFedaModalOpen(false);
+    };
+
     const handleEvaluationSubmitted = ({ instructor, evaluation_result: evaluationResult }) => {
-        setEvaluationItems((prev) => prev.map((item) => (
-            item.instructor === instructor
-                ? { ...item, evaluated: true, evaluation_result: evaluationResult || item.evaluation_result }
-                : item
-        )));
+        window.location.reload();
+    };
+
+    const hasEvaluationItems = evaluations && evaluations.length > 0;
+
+    // Pagination component
+    const Pagination = () => {
+        if (lastPage <= 1) return null;
+
+        const maxVisible = 5;
+        let startPage = Math.max(1, localCurrentPage - Math.floor(maxVisible / 2));
+        let endPage = Math.min(lastPage, startPage + maxVisible - 1);
+        
+        if (endPage - startPage + 1 < maxVisible) {
+            startPage = Math.max(1, endPage - maxVisible + 1);
+        }
+
+        return (
+            <div className="flex items-center justify-between border-t border-slate-200 bg-white px-4 py-3 sm:px-6 mt-6">
+                <div className="flex flex-1 justify-between sm:hidden">
+                    <button
+                        onClick={() => handlePageChange(localCurrentPage - 1)}
+                        disabled={localCurrentPage === 1 || isLoading}
+                        className="relative inline-flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        Previous
+                    </button>
+                    <span className="text-sm text-slate-700 py-2">
+                        Page {localCurrentPage} of {lastPage}
+                    </span>
+                    <button
+                        onClick={() => handlePageChange(localCurrentPage + 1)}
+                        disabled={localCurrentPage === lastPage || isLoading}
+                        className="relative inline-flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        Next
+                    </button>
+                </div>
+                <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+                    <div>
+                        <p className="text-sm text-slate-700">
+                            Showing <span className="font-medium">{(localCurrentPage - 1) * perPage + 1}</span> to{' '}
+                            <span className="font-medium">{Math.min(localCurrentPage * perPage, totalEvaluations)}</span> of{' '}
+                            <span className="font-medium">{totalEvaluations}</span> results
+                        </p>
+                    </div>
+                    <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+                        <button
+                            onClick={() => handlePageChange(1)}
+                            disabled={localCurrentPage === 1 || isLoading}
+                            className="relative inline-flex items-center rounded-l-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="First page"
+                        >
+                            <span className="sr-only">First</span>
+                            <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M15.79 14.77a.75.75 0 01-1.06.02l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 111.04 1.08L11.832 10l3.938 3.71a.75.75 0 01.02 1.06zm-6 0a.75.75 0 01-1.06.02l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 111.04 1.08L5.832 10l3.938 3.71a.75.75 0 01.02 1.06z" clipRule="evenodd" />
+                            </svg>
+                        </button>
+                        <button
+                            onClick={() => handlePageChange(localCurrentPage - 1)}
+                            disabled={localCurrentPage === 1 || isLoading}
+                            className="relative inline-flex items-center px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Previous page"
+                        >
+                            <span className="sr-only">Previous</span>
+                            <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clipRule="evenodd" />
+                            </svg>
+                        </button>
+                        
+                        {startPage > 1 && (
+                            <>
+                                <button
+                                    onClick={() => handlePageChange(1)}
+                                    disabled={isLoading}
+                                    className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-slate-900 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 disabled:opacity-50"
+                                >
+                                    1
+                                </button>
+                                {startPage > 2 && (
+                                    <span className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-300">
+                                        ...
+                                    </span>
+                                )}
+                            </>
+                        )}
+                        
+                        {Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i).map(page => (
+                            <button
+                                key={page}
+                                onClick={() => handlePageChange(page)}
+                                disabled={isLoading}
+                                className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${
+                                    page === localCurrentPage
+                                        ? 'z-10 bg-blue-600 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600'
+                                        : 'text-slate-900 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20'
+                                }`}
+                            >
+                                {page}
+                            </button>
+                        ))}
+                        
+                        {endPage < lastPage && (
+                            <>
+                                {endPage < lastPage - 1 && (
+                                    <span className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-300">
+                                        ...
+                                    </span>
+                                )}
+                                <button
+                                    onClick={() => handlePageChange(lastPage)}
+                                    disabled={isLoading}
+                                    className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-slate-900 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 disabled:opacity-50"
+                                >
+                                    {lastPage}
+                                </button>
+                            </>
+                        )}
+                        
+                        <button
+                            onClick={() => handlePageChange(localCurrentPage + 1)}
+                            disabled={localCurrentPage === lastPage || isLoading}
+                            className="relative inline-flex items-center px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Next page"
+                        >
+                            <span className="sr-only">Next</span>
+                            <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
+                            </svg>
+                        </button>
+                        <button
+                            onClick={() => handlePageChange(lastPage)}
+                            disabled={localCurrentPage === lastPage || isLoading}
+                            className="relative inline-flex items-center rounded-r-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Last page"
+                        >
+                            <span className="sr-only">Last</span>
+                            <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M4.21 14.77a.75.75 0 001.06.02l4.5-4.25a.75.75 0 000-1.08l-4.5-4.25a.75.75 0 00-1.04 1.08l3.938 3.71-3.938 3.71a.75.75 0 00-.02 1.06zm6 0a.75.75 0 001.06.02l4.5-4.25a.75.75 0 000-1.08l-4.5-4.25a.75.75 0 00-1.04 1.08l3.938 3.71-3.938 3.71a.75.75 0 00-.02 1.06z" clipRule="evenodd" />
+                            </svg>
+                        </button>
+                    </nav>
+                </div>
+            </div>
+        );
     };
 
     return (
@@ -119,7 +454,6 @@ export default function EvaluationPage({
                     </div>
 
                     {infoMessage ? (
-                        // ----- COMING SOON MESSAGE FOR DEANS (or other blocked roles) -----
                         <div className="mt-10 flex justify-center items-center">
                             <div className="bg-amber-50 border border-amber-200 rounded-lg p-8 max-w-2xl text-center shadow-sm">
                                 <h2 className="text-xl font-semibold text-amber-800 mb-2">Under Development</h2>
@@ -130,21 +464,18 @@ export default function EvaluationPage({
                             </div>
                         </div>
                     ) : (
-                        // ----- NORMAL EVALUATION UI -----
                         <>
                             <div className="mt-6 flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-                                <form method="GET" action={evaluationUrl} className="w-full xl:flex-1">
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 max-w-3xl">
+                                <div className="w-full xl:flex-1">
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                        {/* School Year Filter */}
                                         <label className="block">
                                             <span className="sr-only">School Year</span>
                                             <select
                                                 name="term"
-                                                value={selectedSchoolYearFilter}
-                                                onChange={(event) => {
-                                                    setSelectedSchoolYearFilter(event.target.value);
-                                                    event.currentTarget.form?.submit();
-                                                }}
-                                                className="w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                                                value={localSchoolYear}
+                                                onChange={handleFilterChange}
+                                                className="w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 disabled:opacity-50"
                                             >
                                                 {schoolYears.map((option) => (
                                                     <option key={option.value} value={option.value}>{option.label}</option>
@@ -152,36 +483,74 @@ export default function EvaluationPage({
                                             </select>
                                         </label>
 
+                                        {/* Status Filter */}
                                         <label className="block">
                                             <span className="sr-only">Status</span>
                                             <select
                                                 name="status"
-                                                defaultValue={selectedTerm}
-                                                onChange={(event) => event.currentTarget.form?.submit()}
-                                                className="w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                                                value={localTerm}
+                                                onChange={handleFilterChange}
+                                                className="w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 disabled:opacity-50"
                                             >
-                                                {terms.map((option) => (
+                                                {statusOptions.map((option) => (
                                                     <option key={option.value} value={option.value}>{option.label}</option>
                                                 ))}
                                             </select>
                                         </label>
 
-                                        <label className="block">
-                                            <span className="sr-only">Name</span>
-                                            <select
-                                                name="subject"
-                                                defaultValue={selectedSubject}
-                                                onChange={(event) => event.currentTarget.form?.submit()}
-                                                className="w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
-                                            >
-                                                <option value="">Select a name to evaluate</option>
-                                                {subjects.filter((option) => option.value).map((option) => (
-                                                    <option key={option.value} value={option.value}>{option.label}</option>
-                                                ))}
-                                            </select>
-                                        </label>
+                                        {/* Unit Filter - Only shown for Admin, Associate Dean, and Dean */}
+                                        {showUnitFilter && (
+                                            <label className="block">
+                                                <span className="sr-only">Unit</span>
+                                                <select
+                                                    name="unit"
+                                                    value={localUnit}
+                                                    onChange={handleFilterChange}
+                                                    className="w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 disabled:opacity-50"
+                                                >
+                                                    {units.map((option) => (
+                                                        <option key={option.value} value={option.value}>{option.label}</option>
+                                                    ))}
+                                                </select>
+                                            </label>
+                                        )}
+
+                                        {/* Search Bar */}
+                                        <div className={`relative ${showUnitFilter ? '' : 'md:col-span-2'}`}>
+                                            <input
+                                                type="text"
+                                                placeholder="Search by name or ID..."
+                                                value={localSearchQuery}
+                                                onChange={handleSearchChange}
+                                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 pl-9 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 disabled:opacity-50 disabled:bg-slate-50"
+                                            />
+                                            {isLoading ? (
+                                                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                                    <svg className="animate-spin h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24">
+                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                    </svg>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                                    </svg>
+                                                    {localSearchQuery && (
+                                                        <button
+                                                            onClick={handleClearSearch}
+                                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                                        >
+                                                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                            </svg>
+                                                        </button>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
                                     </div>
-                                </form>
+                                </div>
 
                                 <div className="flex shrink-0 xl:pt-1">
                                     <span className={`inline-flex items-center justify-center rounded-md px-3 py-1.5 text-xs font-semibold whitespace-nowrap ${
@@ -192,85 +561,131 @@ export default function EvaluationPage({
                                 </div>
                             </div>
 
-                            <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                {evaluationItems.map((item, idx) => (
-                                    <div key={idx} className="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
-                                        {/* card content same as before */}
-                                        <div className="flex items-start justify-between gap-4">
-                                            <div className="flex items-start gap-3 min-w-0">
-                                                <div className="h-10 w-10 rounded-full bg-blue-600/10 text-blue-700 flex items-center justify-center text-sm font-semibold shrink-0">
-                                                    {item.initials}
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <div className="text-sm font-semibold text-slate-900 truncate">
-                                                        {item.instructor}
-                                                    </div>
-                                                    <div className="mt-1 space-y-1 text-xs text-slate-500">
-                                                        <div className="truncate">
-                                                            <span className="font-semibold text-slate-700">Academic Rank:</span> {item.academic_rank || 'N/A'}
-                                                        </div>
-                                                        <div className="truncate">
-                                                            <span className="font-semibold text-slate-700">College:</span> {item.college || 'N/A'}
-                                                        </div>
-                                                        <div className="truncate">
-                                                            <span className="font-semibold text-slate-700">Program:</span> {item.program || 'N/A'}
-                                                        </div>
-                                                        <div className="truncate">
-                                                            <span className="font-semibold text-slate-700">Semester:</span> {item.term || 'N/A'}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="shrink-0">
-                                                {item.evaluated ? (
-                                                    <span className="inline-flex items-center rounded-md bg-emerald-100 px-3 py-1.5 text-xs font-semibold text-emerald-700">
-                                                        Evaluated
-                                                    </span>
-                                                ) : isEvaluationClosed ? (
-                                                    <span className="inline-flex items-center rounded-md bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-700">
-                                                        Closed Evaluation
-                                                    </span>
-                                                ) : (
-                                                    <span className="inline-flex items-center rounded-md bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-700">
-                                                        For Evaluation
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        <div className="mt-4">
-                                            {item.evaluated ? (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => openResultModal(item)}
-                                                    className="inline-flex cursor-pointer items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
-                                                >
-                                                    View Evaluation
-                                                </button>
-                                            ) : isEvaluationClosed ? (
-                                                <button
-                                                    type="button"
-                                                    disabled
-                                                    className="inline-flex items-center rounded-md bg-slate-300 px-3 py-2 text-xs font-semibold text-slate-600 cursor-not-allowed"
-                                                >
-                                                    Evaluation Closed
-                                                </button>
-                                            ) : (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => openEvaluationModal(item)}
-                                                    className="inline-flex cursor-pointer items-center rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"
-                                                >
-                                                    Start Evaluation
-                                                </button>
-                                            )}
-                                        </div>
+                            {/* Loading Overlay */}
+                            {isLoading && (
+                                <div className="flex justify-center items-center min-h-[200px] sm:min-h-[250px] md:min-h-[300px] lg:min-h-[350px] py-8 sm:py-12 md:py-16">
+                                    <div className="flex flex-col items-center gap-3">
+                                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                                        <span className="text-sm font-medium text-blue-600">Loading...</span>
                                     </div>
-                                ))}
-                            </div>
+                                </div>
+                            )}
+
+                            {!isLoading && hasEvaluationItems ? (
+                                <>
+                                    <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                        {evaluations.map((item, idx) => (
+                                            <div key={idx} className="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
+                                                <div className="flex items-start justify-between gap-4">
+                                                    <div className="flex items-start gap-3 min-w-0">
+                                                        <div className="h-10 w-10 rounded-full bg-blue-600/10 text-blue-700 flex items-center justify-center text-sm font-semibold shrink-0">
+                                                            {item.initials}
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <div className="text-sm font-semibold text-slate-900 truncate">
+                                                                {item.instructor}
+                                                            </div>
+                                                            <div className="mt-1 space-y-1 text-xs text-slate-500">
+                                                                <div className="truncate">
+                                                                    <span className="font-semibold text-slate-700">Academic Rank:</span> {item.academic_rank || 'N/A'}
+                                                                </div>
+                                                                <div className="truncate">
+                                                                    <span className="font-semibold text-slate-700">College:</span> {item.college || 'N/A'}
+                                                                </div>
+                                                                <div className="truncate">
+                                                                    <span className="font-semibold text-slate-700">Program:</span> {item.program || 'N/A'}
+                                                                </div>
+                                                                <div className="truncate">
+                                                                    <span className="font-semibold text-slate-700">Semester:</span> {item.term || 'N/A'}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="shrink-0">
+                                                        {item.evaluated ? (
+                                                            <span className="inline-flex items-center rounded-md bg-emerald-100 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+                                                                SEF Evaluated
+                                                            </span>
+                                                        ) : isEvaluationClosed ? (
+                                                            <span className="inline-flex items-center rounded-md bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-700">
+                                                                Closed SEF Evaluation
+                                                            </span>
+                                                        ) : (
+                                                            <span className="inline-flex items-center rounded-md bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-700">
+                                                                For SEF Evaluation
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <div className="mt-4 flex flex-wrap items-center gap-2">
+                                                    {item.evaluated ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openResultModal(item)}
+                                                            className="inline-flex cursor-pointer items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+                                                        >
+                                                            View Evaluation
+                                                        </button>
+                                                    ) : isEvaluationClosed ? (
+                                                        <button
+                                                            type="button"
+                                                            disabled
+                                                            className="inline-flex items-center rounded-md bg-slate-300 px-3 py-2 text-xs font-semibold text-slate-600 cursor-not-allowed"
+                                                        >
+                                                            Evaluation Closed
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openEvaluationModal(item)}
+                                                            className="inline-flex cursor-pointer items-center rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"
+                                                        >
+                                                            Evaluate SEF
+                                                        </button>
+                                                    )}
+                                                    
+                                                    {(() => {
+                                                        const isFedaSubmitted = item.feda_submitted || false;
+                                                        return (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openFedaModal(item)}
+                                                                className={`inline-flex cursor-pointer items-center rounded-md px-3 py-2 text-xs font-semibold ${
+                                                                    isFedaSubmitted 
+                                                                        ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                                                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                                                                }`}
+                                                            >
+                                                                {isFedaSubmitted ? 'View FEDA Form' : 'Open FEDA Form'}
+                                                            </button>
+                                                        );
+                                                    })()}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    
+                                    <Pagination />
+                                </>
+                            ) : !isLoading && !hasEvaluationItems ? (
+                                <div className="mt-10 flex justify-center items-center">
+                                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-8 max-w-2xl text-center shadow-sm">
+                                        <p className="text-sm text-slate-500">
+                                            No faculty members available for evaluation in the selected term.
+                                        </p>
+                                    </div>
+                                </div>
+                            ) : null}
                         </>
                     )}
                 </div>
+
+                <EvaluationResultModal
+                    isOpen={isResultOpen}
+                    onClose={closeResultModal}
+                    result={selectedResult}
+                />
 
                 <SefEvaluationModal
                     isOpen={isEvaluationOpen}
@@ -281,11 +696,25 @@ export default function EvaluationPage({
                     onClose={closeEvaluationModal}
                 />
 
-                <EvaluationResultModal
-                    isOpen={isResultOpen}
-                    result={selectedResult}
-                    onClose={closeResultModal}
-                />
+                {selectedFedaFaculty?.is_view_mode ? (
+                    <FEDAResultModal
+                        isOpen={isFedaModalOpen}
+                        onClose={closeFedaModal}
+                        faculty={selectedFedaFaculty}
+                        termId={localSchoolYear}
+                        termLabel={selectedFedaFaculty?.term || schoolYears.find((option) => option.value === localSchoolYear)?.label || localSchoolYear}
+                    />
+                ) : (
+                    <FEDAFormModal
+                        isOpen={isFedaModalOpen}
+                        onClose={closeFedaModal}
+                        onSubmitted={() => window.location.reload()}
+                        faculty={selectedFedaFaculty}
+                        termId={localSchoolYear}
+                        termLabel={selectedFedaFaculty?.term || schoolYears.find((option) => option.value === localSchoolYear)?.label || localSchoolYear}
+                        isViewMode={selectedFedaFaculty?.is_view_mode || false}
+                    />
+                )}
             </main>
         </AppLayout>
     );

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { getRoleLabel, normalizeRole } from '../utils/role';
 
 export default function Sidebar({
@@ -84,28 +84,12 @@ export default function Sidebar({
                                 <path d="M12 18v4" />
                             </svg>
                         </span>
-                        <span className="text-sm font-medium">Evaluation</span>
+                        <span className="text-sm font-medium">Faculty Evaluation</span>
                         {hasPendingEvaluations ? (
-                            <span className="ml-auto inline-flex h-2.5 w-2.5 rounded-full bg-red-500" aria-label="Pending evaluations" title="Pending evaluations" />
+                            <span className="inline-flex h-2.5 w-2.5 rounded-full bg-red-500 ml-auto" aria-label="Pending evaluations" title="Pending evaluations" />
                         ) : null}
                     </a>
                 ) : null}
-
-                {/* {resolvedCanAccessEvaluation ? (
-                    <a href={gradesUrl} className={navClass('grades')}>
-                        <span className={iconClass('grades')}>
-                            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M8 6h12" />
-                                <path d="M8 12h12" />
-                                <path d="M8 18h12" />
-                                <path d="M4 6h.01" />
-                                <path d="M4 12h.01" />
-                                <path d="M4 18h.01" />
-                            </svg>
-                        </span>
-                        <span className="text-sm font-medium">Grades</span>
-                    </a>
-                ) : null} */}
 
                 <a href={reportsUrl} className={navClass('reports')}>
                     <span className={iconClass('reports')}>
@@ -118,16 +102,6 @@ export default function Sidebar({
                     </span>
                     <span className="text-sm font-medium">Evaluation Reports</span>
                 </a>
-
-                {/* <a href={profileUrl} className={navClass('profile')}>
-                    <span className={iconClass('profile')}>
-                        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Z" />
-                            <path d="M20 21a8 8 0 1 0-16 0" />
-                        </svg>
-                    </span>
-                    <span className="text-sm font-medium">My Profile</span>
-                </a> */}
 
                 <div className="my-2 border-t border-slate-200" />
 

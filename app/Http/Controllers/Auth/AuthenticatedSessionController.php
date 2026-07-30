@@ -50,6 +50,6 @@ class AuthenticatedSessionController extends Controller
         $request->session()->regenerateToken();
 
         // Redirect to SSO Dashboard
-        return redirect()->away('https://10.5.70.45/ids/fims/home/n');
+        return redirect()->away('https://10.10.251.9/ids/fims/home/n');
     }
 }

@@ -267,6 +267,14 @@ class ReportsController extends Controller
                     ) as label
                 ")
             )
+            ->where(function($query) {
+                $query->where('school_year_from', '>', 2025)
+                    ->orWhere(function($q) {
+                        $q->where('school_year_from', '=', 2025)
+                            ->where('school_year_to', '=', 2026)
+                            ->where('semester', '>=', 2);
+                    });
+            })
             ->orderByDesc('school_year_to')
             ->orderByDesc('school_year_from')
             ->orderByDesc('semester')
@@ -561,6 +569,14 @@ class ReportsController extends Controller
                     ) as label
                 ")
             )
+            ->where(function($query) {
+                $query->where('school_year_from', '>', 2025)
+                    ->orWhere(function($q) {
+                        $q->where('school_year_from', '=', 2025)
+                            ->where('school_year_to', '=', 2026)
+                            ->where('semester', '>=', 2);
+                    });
+            })
             ->orderByDesc('school_year_to')
             ->orderByDesc('school_year_from')
             ->orderByDesc('semester')
@@ -988,6 +1004,14 @@ class ReportsController extends Controller
                     ) as label
                 ")
             )
+            ->where(function($query) {
+                $query->where('school_year_from', '>', 2025)
+                    ->orWhere(function($q) {
+                        $q->where('school_year_from', '=', 2025)
+                            ->where('school_year_to', '=', 2026)
+                            ->where('semester', '>=', 2);
+                    });
+            })
             ->orderByDesc('school_year_to')
             ->orderByDesc('school_year_from')
             ->orderByDesc('semester')

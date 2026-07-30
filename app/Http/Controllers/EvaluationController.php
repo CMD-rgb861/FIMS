@@ -6,6 +6,8 @@ use App\Http\Controllers\Traits\FacultyData;
 use App\Models\SupervisorEvaluationSubmission;
 use App\Models\User;
 use App\Models\Dean;
+use App\Models\Unit;
+use App\Models\FacultyDevelopmentForm;
 use Inertia\Inertia;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -25,21 +27,34 @@ class EvaluationController extends Controller
         abort_if(!$canAccessEvaluation, 403);
 
         if ($currentUser->isDean()) {
-        $evaluationProps = $this->commonInertiaProps($currentUser, [
-            'schoolYears' => [],
-            'terms' => [],
-            'subjects' => [],
-            'evaluations' => [],
-            'evaluatedInstructors' => [],
-            'selectedSchoolYear' => null,
-            'selectedTerm' => 'all',
-            'selectedSubject' => '',
-            'isEvaluationClosed' => false,
-            'evaluationStatusLabel' => 'Dean Access',
-            'infoMessage' => 'Coming Soon: Evaluation module for Deans is currently under development.',
-        ]);
-        return Inertia::render('EvaluationPage', $evaluationProps);
-    }
+            $evaluationProps = $this->commonInertiaProps($currentUser, [
+                'schoolYears' => [],
+                'terms' => [],
+                'statusOptions' => [
+                    ['label' => 'All', 'value' => 'all'],
+                    ['label' => 'For Evaluation', 'value' => 'for-evaluation'],
+                    ['label' => 'Evaluated', 'value' => 'evaluated'],
+                ],
+                'units' => [],
+                'subjects' => [],
+                'evaluations' => [],
+                'evaluatedInstructors' => [],
+                'selectedSchoolYear' => null,
+                'selectedTerm' => 'all',
+                'selectedUnit' => '',
+                'selectedSubject' => '',
+                'searchQuery' => '',
+                'currentPage' => 1,
+                'totalEvaluations' => 0,
+                'lastPage' => 1,
+                'perPage' => 10,
+                'showUnitFilter' => false,
+                'isEvaluationClosed' => false,
+                'evaluationStatusLabel' => 'Dean Access',
+                'infoMessage' => 'Coming Soon: Evaluation module for Deans is currently under development.',
+            ]);
+            return Inertia::render('EvaluationPage', $evaluationProps);
+        }
 
         // 1. Get all school years (cached)
         $schoolYears = $this->getSchoolYearsList();
@@ -62,10 +77,40 @@ class EvaluationController extends Controller
             return $this->renderEmptyState($currentUser, 'Selected school year not found.');
         }
 
-        // 4. Get faculty evaluations for the selected school year (optimized batch loading)
+        // 4. Get units for the filter dropdown
+        $units = $this->getUnitsList($currentUser);
+
+        // 5. Get faculty evaluations for the selected school year (optimized batch loading)
         $facultyEvaluations = $this->getFacultyUsersForEvaluation($currentUser, $selectedSchoolYearId, $selectedSchoolYear);
 
-        // 5. Build dropdown options for faculty names
+        // 6. Get filter and pagination params
+        $searchQuery = $request->query('search', '');
+        $currentPage = (int) $request->query('page', 1);
+        $perPage = 10; // Max 10 items per page
+        $selectedUnit = $request->query('unit', '');
+        $selectedTerm = $request->query('status', 'all');
+        $selectedSubject = $request->query('subject', '');
+
+        // 7. Filter faculty evaluations by unit if selected
+        if (!empty($selectedUnit)) {
+            $facultyEvaluations = array_values(array_filter(
+                $facultyEvaluations, 
+                fn($f) => isset($f['unit_id']) && (string) $f['unit_id'] === $selectedUnit
+            ));
+        }
+
+        // 8. Filter by search query (name or ID)
+        if (!empty($searchQuery)) {
+            $searchLower = strtolower($searchQuery);
+            $facultyEvaluations = array_values(array_filter(
+                $facultyEvaluations,
+                fn($f) => 
+                    strpos(strtolower($f['instructor'] ?? ''), $searchLower) !== false ||
+                    strpos(strtolower($f['id_no'] ?? ''), $searchLower) !== false
+            ));
+        }
+
+        // 9. Build dropdown options for faculty names (based on filtered results)
         $subjects = collect($facultyEvaluations)
             ->map(fn($f) => isset($f['instructor']) ? ['label' => $f['instructor'], 'value' => $f['instructor']] : null)
             ->filter()
@@ -73,7 +118,7 @@ class EvaluationController extends Controller
             ->values()
             ->all();
 
-        // 6. Get already submitted evaluations by the current user
+        // 10. Get already submitted evaluations by the current user
         $evaluatedSubmissions = SupervisorEvaluationSubmission::query()
             ->with(['answers' => function ($q) {
                 $q->select('submission_id', 'question_key', 'score');
@@ -89,37 +134,54 @@ class EvaluationController extends Controller
             ->unique('instructor_id_no')
             ->keyBy('instructor_id_no');
 
-        // 7. Build final evaluations array (without heavy subjects array)
-        $evaluations = $this->buildEvaluationsArray($facultyEvaluations, $evaluatedInstructors, $latestEvaluationsByInstructor, $selectedSchoolYearId);
+        // 11. Build final evaluations array
+        $allEvaluations = $this->buildEvaluationsArray($facultyEvaluations, $evaluatedInstructors, $latestEvaluationsByInstructor, $selectedSchoolYearId);
 
-        // 8. Apply status filter
-        $selectedTerm = $request->query('status', 'all');
+        // 12. Apply status filter
         if ($selectedTerm === 'for-evaluation') {
-            $evaluations = array_values(array_filter($evaluations, fn($item) => !$item['evaluated']));
+            $allEvaluations = array_values(array_filter($allEvaluations, fn($item) => !$item['evaluated']));
         } elseif ($selectedTerm === 'evaluated') {
-            $evaluations = array_values(array_filter($evaluations, fn($item) => $item['evaluated']));
+            $allEvaluations = array_values(array_filter($allEvaluations, fn($item) => $item['evaluated']));
         }
 
-        // 9. Apply instructor name filter
-        $selectedSubject = $request->query('subject', '');
+        // 13. Apply instructor name filter
         if (!empty($selectedSubject)) {
-            $evaluations = array_values(array_filter($evaluations, fn($item) => ($item['instructor'] ?? '') === $selectedSubject));
+            $allEvaluations = array_values(array_filter($allEvaluations, fn($item) => ($item['instructor'] ?? '') === $selectedSubject));
         }
 
-        // 10. Prepare Inertia props
+        // 14. Paginate evaluations
+        $totalEvaluations = count($allEvaluations);
+        $lastPage = max(1, (int) ceil($totalEvaluations / $perPage));
+        $currentPage = max(1, min($currentPage, $lastPage));
+        $offset = ($currentPage - 1) * $perPage;
+        $paginatedEvaluations = array_slice($allEvaluations, $offset, $perPage);
+
+        // 15. Prepare Inertia props
+        $showUnitFilter = $currentUser->isAdmin() || $currentUser->isDean() || $currentUser->isAssociateDean();
+
+        $statusOptions = [
+            ['label' => 'All', 'value' => 'all'],
+            ['label' => 'For Evaluation', 'value' => 'for-evaluation'],
+            ['label' => 'Evaluated', 'value' => 'evaluated'],
+        ];
+
         $evaluationProps = $this->commonInertiaProps($currentUser, [
             'schoolYears' => $schoolYears,
-            'terms' => [
-                ['label' => 'All', 'value' => 'all'],
-                ['label' => 'For Evaluation', 'value' => 'for-evaluation'],
-                ['label' => 'Evaluated', 'value' => 'evaluated'],
-            ],
+            'statusOptions' => $statusOptions,
+            'units' => $units,
             'subjects' => $subjects,
-            'evaluations' => $evaluations,
+            'evaluations' => $paginatedEvaluations,
             'evaluatedInstructors' => $evaluatedInstructors,
             'selectedSchoolYear' => (string) $selectedSchoolYearId,
             'selectedTerm' => $selectedTerm,
+            'selectedUnit' => $selectedUnit,
             'selectedSubject' => $selectedSubject,
+            'searchQuery' => $searchQuery,
+            'currentPage' => $currentPage,
+            'totalEvaluations' => $totalEvaluations,
+            'lastPage' => $lastPage,
+            'perPage' => $perPage,
+            'showUnitFilter' => $showUnitFilter,
             'isEvaluationClosed' => false,
             'evaluationStatusLabel' => 'Open for Evaluation',
             'activeSchoolYear' => [
@@ -138,6 +200,50 @@ class EvaluationController extends Controller
     }
 
     /**
+     * Get units list for filter dropdown based on user role
+     */
+    private function getUnitsList($user): array
+    {
+        if ($user->isAdmin()) {
+            $units = Unit::orderBy('name')->get();
+            return $units->map(fn($unit) => [
+                'label' => $unit->name,
+                'value' => (string) $unit->id,
+            ])->prepend(['label' => 'All Units', 'value' => ''])->values()->all();
+        }
+
+        if ($user->isUnitHead()) {
+            $unitHead = $user->unitHead;
+            if (!$unitHead || !$unitHead->unit_id) {
+                return [];
+            }
+            
+            $unit = Unit::find($unitHead->unit_id);
+            return $unit ? [
+                ['label' => $unit->name, 'value' => (string) $unit->id]
+            ] : [];
+        }
+
+        if ($user->isAssociateDean()) {
+            $associateDean = $user->associateDean;
+            if (!$associateDean || !$associateDean->college_id) {
+                return [];
+            }
+
+            $units = Unit::where('department_id', $associateDean->college_id)
+                ->orderBy('name')
+                ->get();
+            
+            return $units->map(fn($unit) => [
+                'label' => $unit->name,
+                'value' => (string) $unit->id,
+            ])->prepend(['label' => 'All Units', 'value' => ''])->values()->all();
+        }
+
+        return [];
+    }
+
+    /**
      * Get active school year with caching and corruption detection.
      */
     private function getActiveSchoolYear()
@@ -151,6 +257,14 @@ class EvaluationController extends Controller
             ->table('school_years')
             ->where('is_active', 1)
             ->first();
+
+        if (!$fresh) {
+            $fresh = DB::connection('lnu_poes')
+                ->table('school_years')
+                ->orderByDesc('school_year_from')
+                ->orderByDesc('semester')
+                ->first();
+        }
 
         if ($fresh) {
             Cache::put('active_school_year', $fresh, self::CACHE_TTL);
@@ -180,9 +294,19 @@ class EvaluationController extends Controller
             return $cached;
         }
 
+        $minYear = 2025;
+        $minSemester = 2;
+
         $rows = DB::connection('lnu_poes')
             ->table('school_years')
             ->select(['id', 'school_year_from', 'school_year_to', 'semester'])
+            ->where(function($query) use ($minYear, $minSemester) {
+                $query->where('school_year_from', '>', $minYear)
+                    ->orWhere(function($q) use ($minYear, $minSemester) {
+                        $q->where('school_year_from', '=', $minYear)
+                            ->where('semester', '>=', $minSemester);
+                    });
+            })
             ->orderByDesc('school_year_to')
             ->orderByDesc('school_year_from')
             ->orderByDesc('semester')
@@ -220,7 +344,6 @@ class EvaluationController extends Controller
 
     /**
      * Get faculty users eligible for evaluation based on role and selected school year.
-     * Uses batch loading for courses to avoid N+1.
      */
     private function getFacultyUsersForEvaluation($user, int $schoolYearId, $schoolYear): array
     {
@@ -228,19 +351,17 @@ class EvaluationController extends Controller
             return [];
         }
 
-        // SPECIAL CASE: Associate Dean -> Show all Unit Heads of the same college
         if ($user->isAssociateDean()) {
             $associateDean = $user->associateDean;
-
             if (!$associateDean || !$associateDean->college_id) {
                 return [];
             }
 
             $collegeId = $associateDean->college_id;
-
             $unitHeadUsers = User::query()
                 ->whereHas('unitHead')
                 ->where('college_id', $collegeId)
+                ->where('id', '!=', $user->id)
                 ->with(['college', 'unit'])
                 ->orderBy('lastname')
                 ->orderBy('firstname')
@@ -250,12 +371,7 @@ class EvaluationController extends Controller
                 return [];
             }
 
-            $idNos = $unitHeadUsers->pluck('id_no')
-                ->filter()
-                ->unique()
-                ->values()
-                ->all();
-
+            $idNos = $unitHeadUsers->pluck('id_no')->filter()->unique()->values()->all();
             if (empty($idNos)) {
                 return [];
             }
@@ -264,29 +380,23 @@ class EvaluationController extends Controller
                 ->table('enrollment_courses')
                 ->where('school_year_id', $schoolYearId)
                 ->whereIn('id_no', $idNos)
-                ->select([
-                    'id_no',
-                    'course_code',
-                    'course_description'
-                ])
+                ->select(['id_no', 'course_code', 'course_description'])
                 ->get();
 
             $coursesByIdNo = $allCourses->groupBy('id_no');
-
             $termLabel = $this->buildTermLabel($schoolYear);
             $unitHeadEvaluations = [];
 
             foreach ($unitHeadUsers as $unitHeadUser) {
                 $courses = $coursesByIdNo->get($unitHeadUser->id_no);
-
                 if (!$courses || $courses->isEmpty()) {
                     continue;
                 }
 
                 $firstCourse = $courses->first();
-
                 $displayName = $this->buildDisplayName($unitHeadUser);
                 $initials = $this->buildInitials($displayName, $unitHeadUser->id_no);
+                $fedaSubmitted = FacultyDevelopmentForm::hasSubmittedFormFor($unitHeadUser->id_no, $schoolYearId);
 
                 $unitHeadEvaluations[] = [
                     'initials' => $initials,
@@ -301,19 +411,19 @@ class EvaluationController extends Controller
                     'program' => $unitHeadUser->unit?->name ?? 'N/A',
                     'course_code' => $firstCourse->course_code ?? '',
                     'course_title' => $firstCourse->course_description ?? '',
+                    'feda_submitted' => $fedaSubmitted,
                 ];
             }
 
             return $unitHeadEvaluations;
         }
 
-        // NORMAL CASE: Admin, Unit Head (Dean sees nothing)
         $facultyQuery = User::query()
             ->whereNotNull('id_no')
             ->where('id_no', '!=', '')
             ->with(['college', 'unit'])
             ->orderBy('lastname')
-            ->orderBy('firstname'); ;  // eager load college and unit
+            ->orderBy('firstname');
 
         if ($user->isDean()) {
             return [];
@@ -322,7 +432,7 @@ class EvaluationController extends Controller
             if (!$unitHead || !$unitHead->unit_id) {
                 return [];
             }
-            $facultyQuery->where('unit_id', $unitHead->unit_id);
+            $facultyQuery->where('unit_id', $unitHead->unit_id)->where('id', '!=', $user->id);
         } elseif (!$user->isAdmin()) {
             return [];
         }
@@ -337,7 +447,6 @@ class EvaluationController extends Controller
             return [];
         }
 
-        // Batch load courses
         $allCourses = DB::connection('lnu_poes')
             ->table('enrollment_courses')
             ->where('school_year_id', $schoolYearId)
@@ -358,6 +467,7 @@ class EvaluationController extends Controller
             $firstCourse = $courses->first();
             $displayName = $this->buildDisplayName($faculty);
             $initials = $this->buildInitials($displayName, $faculty->id_no);
+            $fedaSubmitted = FacultyDevelopmentForm::hasSubmittedFormFor($faculty->id_no, $schoolYearId);
 
             $facultyEvaluations[] = [
                 'initials' => $initials,
@@ -370,9 +480,9 @@ class EvaluationController extends Controller
                 'academic_rank' => $faculty->academic_rank ?? 'N/A',
                 'college' => $faculty->college?->name ?? 'N/A',
                 'program' => $faculty->unit?->name ?? 'N/A',
-                // Minimal course info for submission
                 'course_code' => $firstCourse->course_code ?? '',
                 'course_title' => $firstCourse->course_description ?? '',
+                'feda_submitted' => $fedaSubmitted,
             ];
         }
 
@@ -406,6 +516,8 @@ class EvaluationController extends Controller
             $ratingPercentage = $latestEvaluation?->rating_percentage
                 ?? ($maxScore > 0 ? round(($totalScore / $maxScore) * 100, 2) : 0);
 
+            $fedaSubmitted = FacultyDevelopmentForm::hasSubmittedFormFor($faculty['id_no'], $selectedSchoolYearId);
+
             $evaluations[] = [
                 'initials' => $faculty['initials'],
                 'instructor' => $faculty['instructor'],
@@ -423,6 +535,7 @@ class EvaluationController extends Controller
                 'evaluated' => in_array($faculty['id_no'], $evaluatedInstructors, true),
                 'code' => $faculty['course_code'] ?? '',
                 'title' => $faculty['course_title'] ?? '',
+                'feda_submitted' => $fedaSubmitted,
                 'evaluation_result' => $latestEvaluation ? [
                     'id' => $latestEvaluation->id,
                     'instructor_id_no' => $latestEvaluation->instructor_id_no,
@@ -449,13 +562,9 @@ class EvaluationController extends Controller
     {
         $firstName = trim($faculty->firstname ?? '');
         $lastName = trim($faculty->lastname ?? '');
-        $middleName = trim($faculty->middlename ?? '');
         $extName = trim($faculty->extname ?? '');
 
         $displayName = trim($firstName . ' ' . $lastName);
-        // if (!empty($middleName)) {
-        //     $displayName .= ' ' . $middleName;
-        // }
         if (!empty($extName)) {
             $displayName .= ' ' . $extName;
         }
@@ -490,13 +599,25 @@ class EvaluationController extends Controller
     {
         $evaluationProps = $this->commonInertiaProps($currentUser, [
             'schoolYears' => [],
-            'terms' => [],
+            'statusOptions' => [
+                ['label' => 'All', 'value' => 'all'],
+                ['label' => 'For Evaluation', 'value' => 'for-evaluation'],
+                ['label' => 'Evaluated', 'value' => 'evaluated'],
+            ],
+            'units' => [],
             'subjects' => [],
             'evaluations' => [],
             'evaluatedInstructors' => [],
             'selectedSchoolYear' => null,
             'selectedTerm' => 'all',
+            'selectedUnit' => '',
             'selectedSubject' => '',
+            'searchQuery' => '',
+            'currentPage' => 1,
+            'totalEvaluations' => 0,
+            'lastPage' => 1,
+            'perPage' => 10,
+            'showUnitFilter' => false,
             'isEvaluationClosed' => false,
             'evaluationStatusLabel' => 'No Active Semester',
             'error' => $errorMessage,

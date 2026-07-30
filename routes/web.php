@@ -3,6 +3,7 @@
 use App\Http\Controllers\AppProfileController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EvaluationController;
+use App\Http\Controllers\FEDAController;
 use App\Http\Controllers\FacultyEvaluationController;
 use App\Http\Controllers\GradesController;
 use App\Http\Controllers\ProfileController;
@@ -10,37 +11,34 @@ use App\Http\Controllers\ReportEvaluationController;
 use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\SubjectsController;
 use App\Http\Controllers\UnitHeadGradeController;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
 use App\Http\Controllers\SubmissionController;
 use App\Http\Controllers\AnswerController; 
 use App\Http\Controllers\Forms\SupervisorEvaluationPDF;
 use App\Http\Controllers\Forms\StudentEvaluationPDF;
 use App\Http\Controllers\Forms\BatchPDFController;
 use App\Http\Controllers\Auth\SsoController;
+use App\Http\Controllers\Forms\IndividualFacultyEvaluationPDF;
+use App\Http\Controllers\Forms\FacultyEvaluationDevelopmentAcknowledgmentPDF;
+use App\Http\Controllers\IFEController;  // ✅ Add this import
 
 Route::get('/sso/validate', [SsoController::class, 'validateToken'])
     ->name('sso.validate');
 
-Route::get('/whereami', function () {
-    return [
-        'app_name' => config('app.name'),
-        'database' => config('database.connections.mysql.database'),
-        'env_exists' => file_exists(base_path('.env')),
-        'env_path' => base_path('.env'),
-        'app_env' => env('APP_NAME'),
-        'db_env' => env('DB_DATABASE'),
-    ];
-});
-
 // ===== EXISTING ROUTES =====
-// Route::get('/', function () {
-//     return redirect()->route('login');
-// });
+// Route::get('login', function () {
+//     return redirect()->away('https://10.10.251.9/ids/fims/home/n');
+// })->name('home');
+
 Route::get('login', function () {
-    return redirect()->away('https://10.5.70.45/ids/fims/home/n');
+    $ip = getHostByName(getHostName());
+
+    return redirect()->away("https://{$ip}/ids/fims/home/n");
 })->name('home');
 
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/subjects', [SubjectsController::class, 'index'])->name('subjects');
     Route::get('/evaluation', [EvaluationController::class, 'index'])->name('evaluation');
@@ -60,7 +58,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     
     // SEF routes (Supervisor Evaluation)
     Route::get('/sef/faculty/{facultyId}/reports', [SupervisorEvaluationPDF::class, 'getFacultySefData'])->name('sef.faculty.reports');
-    Route::post('/sef/pdf/generate', [SupervisorEvaluationPDF::class, 'generate'])->name('sef.pdf.generate');
+    Route::post('/sef/pdf/generate', [BatchPDFController::class, 'generateSEF'])->name('sef.pdf.generate');
     Route::post('/sef/batch-reports', [SupervisorEvaluationPDF::class, 'batchReports'])->name('sef.batch-reports');
     
     // PDF display (single route for all PDFs)
@@ -76,12 +74,49 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::put('/my-profile', [AppProfileController::class, 'update'])->name('my-profile.update');
     Route::get('/account-settings', [AppProfileController::class, 'accountSettingsEdit'])->name('account-settings.edit');
     Route::put('/account-settings', [AppProfileController::class, 'accountSettingsUpdate'])->name('account-settings.update');
+
+    // ===== FEDA ROUTES =====
+    Route::get('/feda/faculty/{facultyId}/data', [FEDAController::class, 'getFacultyData'])->name('feda.faculty.data');
+    
+    // FEDA API endpoint to get instructors
+    Route::get('/feda/instructors', [FEDAController::class, 'getInstructors'])->name('feda.instructors');
+    
+    // Save FEDA form data to the database
+    Route::post('/feda/save', [FEDAController::class, 'save'])->name('feda.save');
+    
+    // Get FEDA PDF URL (NEW)
+    Route::get('/feda/pdf-url/{facultyId}', [FEDAController::class, 'getPdfUrl'])->name('feda.pdf-url');
+    Route::post('/feda/pdf/generate', [BatchPDFController::class, 'generateFEDA'])->name('feda.pdf.generate');//Batch print
+    
+    // FEDA PDF Generation
+    Route::get('/forms/faculty-evaluation-development-acknowledgment-pdf/{id}', [FacultyEvaluationDevelopmentAcknowledgmentPDF::class, 'generate'])->name('feda.form.pdf');
+    Route::get('/forms/individual-faculty-evaluation-pdf/{id}', [IndividualFacultyEvaluationPDF::class, 'generate'])->name('individual.faculty.evaluation.pdf');
+
+    // IFE PDF Generation
+    Route::post('/individual-faculty-evaluation/pdf/generate', [BatchPDFController::class, 'generateIFE'])->name('individual.faculty.evaluation.pdf.generate');
+
+    // ===== IFE ROUTES =====
+    // Get IFE data for a specific faculty
+    Route::get('/ife/faculty/{facultyId}', [IFEController::class, 'getFacultyData'])->name('ife.faculty.data');
+    
+    // Get batch IFE data for multiple faculty
+    Route::post('/ife/batch', [IFEController::class, 'batch'])->name('ife.batch');
+    
+    // Get IFE summary data
+    Route::get('/ife/summary', [IFEController::class, 'summary'])->name('ife.summary');
+
+    // ALL Reports Combined (SEF + IFE + FEDA)
+    Route::post('/reports/print-all/generate', [BatchPDFController::class, 'generateAll'])->name('reports.print-all.generate');
+
+    // ===== SEARCH ROUTES =====
+    Route::post('/search/faculty', [App\Http\Controllers\SearchController::class, 'searchFaculty'])->name('search.faculty');
+    Route::post('/search/subjects', [App\Http\Controllers\SearchController::class, 'searchSubjects'])->name('search.subjects');
 });
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');  
 });
 
 require __DIR__.'/auth.php';

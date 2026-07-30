@@ -1,8 +1,11 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import AppLayout from '../Layouts/AppLayout';
 import { isAdminRole, isDeanRole, isFacultyRole } from '../utils/role';
-import { router, Link } from '@inertiajs/react'; // Added Link
+import { router, Link } from '@inertiajs/react';
 import SefPrintButtonModal from '../modals/SefPrintButtonModal';
+import IfePrintButtonModal from '../modals/IfePrintButtonModal';
+import FedaPrintButtonModal from '../modals/FedaPrintButtonModal';
+import ReportPrintAllButtonModal from '../modals/ReportPrintAllButtonModal';
 
 export default function ReportsPage({
     appName = 'FIMS',
@@ -30,10 +33,16 @@ export default function ReportsPage({
     const isDean = useMemo(() => user?.isDean === true || isDeanRole(user?.role), [user?.isDean, user?.role]);
     const canFilterByUnit = isAdmin || isDean;
     const [isSefModalOpen, setIsSefModalOpen] = useState(false);
+    const [isIfeModalOpen, setIsIfeModalOpen] = useState(false);
+    const [isFedaModalOpen, setIsFedaModalOpen] = useState(false);
+    const [isPrintAllModalOpen, setIsPrintAllModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [currentPage, setCurrentPage] = useState(facultyList.current_page || 1);
     const [gotoPage, setGotoPage] = useState('');
+    const [isPrintDropdownOpen, setIsPrintDropdownOpen] = useState(false);
+    const [printType, setPrintType] = useState('all');
+    const printDropdownRef = useRef(null);
     
     // Refs to track mounted state and prevent duplicate requests
     const isMountedRef = useRef(true);
@@ -57,6 +66,20 @@ export default function ReportsPage({
             if (searchTimeoutRef.current) {
                 clearTimeout(searchTimeoutRef.current);
             }
+        };
+    }, []);
+
+    // Handle click outside to close dropdown
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (printDropdownRef.current && !printDropdownRef.current.contains(event.target)) {
+                setIsPrintDropdownOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
         };
     }, []);
 
@@ -220,7 +243,7 @@ export default function ReportsPage({
             faculty_page: newPage,
             faculty_search: searchQuery,
             faculty_per_page: facultyList.per_page,
-                unit_filter: selectedUnit,
+            unit_filter: selectedUnit,
         }, {
             preserveState: true,
             preserveScroll: true,
@@ -236,7 +259,7 @@ export default function ReportsPage({
             faculty_page: 1,
             faculty_search: searchQuery,
             faculty_per_page: newSize,
-                unit_filter: selectedUnit,
+            unit_filter: selectedUnit,
         }, {
             preserveState: true,
             preserveScroll: true,
@@ -252,6 +275,11 @@ export default function ReportsPage({
             setGotoPage('');
         }
     }, [gotoPage, facultyList.last_page, handlePageChange]);
+
+    // Toggle print dropdown
+    const togglePrintDropdown = () => {
+        setIsPrintDropdownOpen(!isPrintDropdownOpen);
+    };
 
     // Memoized Pagination component
     const Pagination = useMemo(() => {
@@ -578,7 +606,7 @@ export default function ReportsPage({
                 <div className="p-6">
                     {!isFaculty && (
                         <div className="mb-6">
-                            <h1 className="text-2xl font-semibold tracking-tight">Evaluation</h1>
+                            <h1 className="text-2xl font-semibold tracking-tight">Evaluation Reports</h1>
                             <p className="mt-1 text-sm text-slate-500">Faculty evaluation list.</p>
 
                             <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
@@ -589,7 +617,7 @@ export default function ReportsPage({
                                             <select
                                                 value={selectedSchoolYear ? String(selectedSchoolYear) : ''}
                                                 onChange={handleSchoolYearChange}
-                                                className="w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                                                className="w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
                                             >
                                                 {schoolYears.length > 0 ? (
                                                     schoolYears.map((option) => (
@@ -607,7 +635,7 @@ export default function ReportsPage({
                                                 <select
                                                     value={selectedUnit ? String(selectedUnit) : ''}
                                                     onChange={handleUnitChange}
-                                                    className="w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                                                    className="w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
                                                 >
                                                     <option value="">All Units</option>
                                                     {units.length > 0 ? (
@@ -635,15 +663,82 @@ export default function ReportsPage({
                                                 </svg>
                                             </div>
                                             
-                                            <button
-                                                onClick={() => setIsSefModalOpen(true)}
-                                                className="inline-flex items-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
-                                            >
-                                                <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                                                </svg>
-                                                Print Selected SEF
-                                            </button>
+                                            {/* Print Dropdown */}
+                                            <div className="relative" ref={printDropdownRef}>
+                                                <button
+                                                    onClick={togglePrintDropdown}
+                                                    className="inline-flex items-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+                                                >
+                                                    <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                                    </svg>
+                                                    Print IFE/SEF
+                                                    <svg className={`ml-2 h-4 w-4 transition-transform duration-200 ${isPrintDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                    </svg>
+                                                </button>
+                                                
+                                                {isPrintDropdownOpen && (
+                                                    <div className="absolute right-0 mt-1 w-56 rounded-lg border border-slate-200 bg-white shadow-lg z-10 py-1">
+                                                        {/* All option */}
+                                                        <button
+                                                            onClick={() => {
+                                                                setIsPrintDropdownOpen(false);
+                                                                setPrintType('all');
+                                                                setIsPrintAllModalOpen(true);
+                                                            }}
+                                                            className="flex w-full items-center px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors border-b border-slate-100"
+                                                        >
+                                                            <svg className="mr-3 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                                                            </svg>
+                                                            All
+                                                        </button>
+
+                                                        <button
+                                                            onClick={() => {
+                                                                setIsPrintDropdownOpen(false);
+                                                                setPrintType('sef');
+                                                                setIsSefModalOpen(true);
+                                                            }}
+                                                            className="flex w-full items-center px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                                                        >
+                                                            <svg className="mr-3 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                            </svg>
+                                                            Print Selected SEF
+                                                        </button>
+
+                                                        <button
+                                                            onClick={() => {
+                                                                setIsPrintDropdownOpen(false);
+                                                                setPrintType('ife');
+                                                                setIsIfeModalOpen(true);
+                                                            }}
+                                                            className="flex w-full items-center px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                                                        >
+                                                            <svg className="mr-3 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                            </svg>
+                                                            Print Selected IFE
+                                                        </button>
+
+                                                        <button
+                                                            onClick={() => {
+                                                                setIsPrintDropdownOpen(false);
+                                                                setPrintType('feda');
+                                                                setIsFedaModalOpen(true);
+                                                            }}
+                                                            className="flex w-full items-center px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors border-t border-slate-100"
+                                                        >
+                                                            <svg className="mr-3 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                            </svg>
+                                                            Print Selected FEDA
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -676,8 +771,11 @@ export default function ReportsPage({
                             
                             <div className="relative">
                                 {isLoading && (
-                                    <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg">
-                                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                                    <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg p-4 sm:p-6 md:p-8">
+                                        <div className="flex flex-col items-center gap-3">
+                                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                                            <span className="text-sm font-medium text-blue-600">Loading...</span>
+                                        </div>
                                     </div>
                                 )}
                                 
@@ -743,9 +841,14 @@ export default function ReportsPage({
                                 
                                 {Pagination}
                                 
+                                {/* Updated empty state with consistent styling from FEDA page */}
                                 {(!facultyList.data || facultyList.data.length === 0) && !isLoading && (
-                                    <div className="text-center py-12">
-                                        <p className="text-slate-500">No faculty found.</p>
+                                    <div className="flex justify-center items-center py-12">
+                                        <div className="bg-slate-50 border border-slate-200 rounded-lg p-8 max-w-2xl text-center shadow-sm">
+                                            <p className="text-sm text-slate-500">
+                                                {searchQuery ? 'No faculty members match your search.' : 'No faculty members found for the selected term.'}
+                                            </p>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -761,6 +864,37 @@ export default function ReportsPage({
                     facultyListAll={facultyListAll || []}
                     selectedSchoolYear={selectedSchoolYear}
                     schoolYearLabel={selectedSchoolYearLabel}
+                />
+
+                {/* IFE Print Modal */}
+                <IfePrintButtonModal
+                    isOpen={isIfeModalOpen}
+                    onClose={() => setIsIfeModalOpen(false)}
+                    facultyList={facultyList.data || []}
+                    facultyListAll={facultyListAll || []}
+                    selectedSchoolYear={selectedSchoolYear}
+                    schoolYearLabel={selectedSchoolYearLabel}
+                />
+
+                {/* FEDA Print Modal */}
+                <FedaPrintButtonModal
+                    isOpen={isFedaModalOpen}
+                    onClose={() => setIsFedaModalOpen(false)}
+                    facultyList={facultyList.data || []}
+                    facultyListAll={facultyListAll || []}
+                    selectedSchoolYear={selectedSchoolYear}
+                    schoolYearLabel={selectedSchoolYearLabel}
+                />
+
+                {/* Report Print All Modal */}
+                <ReportPrintAllButtonModal
+                    isOpen={isPrintAllModalOpen}
+                    onClose={() => setIsPrintAllModalOpen(false)}
+                    facultyList={facultyList.data || []}
+                    facultyListAll={facultyListAll || []}
+                    selectedSchoolYear={selectedSchoolYear}
+                    schoolYearLabel={selectedSchoolYearLabel}
+                    printType={printType}
                 />
 
             </main>
