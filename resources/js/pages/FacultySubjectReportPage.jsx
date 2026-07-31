@@ -126,33 +126,6 @@ export default function FacultySubjectReportPage({
         title: subject.course_title,
     }));
 
-    const completeReportSummary = useMemo(() => {
-        const hasAverageSef = reportSummary.some(
-            (summary) => summary.label === 'Average SEF Rating'
-        );
-
-        if (hasAverageSef) {
-            return reportSummary;
-        }
-
-        return [
-            ...reportSummary,
-            {
-                label: 'Average SEF Rating',
-                value: 'N/A',
-                helper: 'Average SEF score from supervisor evaluations.',
-            },
-        ];
-    }, [reportSummary]);
-
-    const reportSummaryCards = completeReportSummary.map((summary, index) => (
-        <div key={index} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-medium text-slate-500">{summary.label}</p>
-            <p className="mt-2 text-2xl font-semibold text-slate-900">{summary.value}</p>
-            <p className="mt-1 text-xs text-slate-500">{summary.helper}</p>
-        </div>
-    ));
-
     const subjectCards = facultySubjects.map((subject, index) => (
         <div
             key={`${subject.course_code}-${index}`}
@@ -230,7 +203,7 @@ export default function FacultySubjectReportPage({
                 <div className="p-6">
                     <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                         <div>
-                            <h1 className="text-2xl font-semibold tracking-tight">My Subjects</h1>
+                            <h1 className="text-2xl font-semibold tracking-tight">Subject Evaluation Reports</h1>
                             <p className="mt-1 text-sm text-slate-500">View your subject evaluations and ratings.</p>
                         </div>
 
@@ -345,13 +318,6 @@ export default function FacultySubjectReportPage({
                                     </div>
                                 </div>
                             )}
-                        </div>
-                    </div>
-
-                    {/* Report Summary Cards */}
-                    <div className="mb-6">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                            {reportSummaryCards}
                         </div>
                     </div>
 
