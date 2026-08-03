@@ -21,21 +21,22 @@ use App\Http\Controllers\Auth\SsoController;
 Route::get('/sso/validate', [SsoController::class, 'validateToken'])
     ->name('sso.validate');
 
-Route::get('/whereami', function () {
-    return [
-        'app_name' => config('app.name'),
-        'database' => config('database.connections.mysql.database'),
-        'env_exists' => file_exists(base_path('.env')),
-        'env_path' => base_path('.env'),
-        'app_env' => env('APP_NAME'),
-        'db_env' => env('DB_DATABASE'),
-    ];
-});
+// Route::get('/whereami', function () {
+//     return [
+//         'app_name' => config('app.name'),
+//         'database' => config('database.connections.mysql.database'),
+//         'env_exists' => file_exists(base_path('.env')),
+//         'env_path' => base_path('.env'),
+//         'app_env' => env('APP_NAME'),
+//         'db_env' => env('DB_DATABASE'),
+//     ];
+// });
 
 // ===== EXISTING ROUTES =====
 // Route::get('/', function () {
 //     return redirect()->route('login');
 // });
+
 Route::get('login', function () {
     return redirect()->away('https://10.5.70.45/ids/fims/home/n');
 })->name('home');
