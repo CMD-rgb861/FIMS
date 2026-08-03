@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
-import { router, Link } from '@inertiajs/react'; // Added Link for better navigation
+import { router, Link } from '@inertiajs/react';
 import AppLayout from '../Layouts/AppLayout';
 
 export default function SubjectsPage({
@@ -194,9 +194,9 @@ export default function SubjectsPage({
             logoutUrl={logoutUrl}
             csrfToken={csrfToken}
             hasPendingEvaluations={hasPendingEvaluations}
-            layoutClassName="h-screen flex overflow-hidden bg-slate-50 text-slate-900"
+            layoutClassName="min-h-screen flex"
         >
-            <main className="flex-1 overflow-y-auto">
+            <main className="flex-1">
                 {/* Breadcrumbs - same style as EvaluationPage */}
                 <div className="h-16 bg-white border-b border-slate-200 flex items-center px-6">
                     <div className="text-sm text-slate-500 flex items-center gap-2">
@@ -208,64 +208,93 @@ export default function SubjectsPage({
 
                 {/* Main content with padding */}
                 <div className="p-6">
-                    <div className="mb-6">
-                        <h1 className="text-2xl font-semibold tracking-tight">Enrolled Subjects</h1>
-                        <p className="mt-1 text-sm text-slate-500">Faculty: {displayName}</p>
+                    <div>
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <h1 className="text-2xl font-semibold tracking-tight">
+                                Handled Subjects
+                            </h1>
+
+                            <div className="flex flex-col items-center">
+                                <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                                    Faculty Name
+                                </span>
+                                <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                                    {displayName}
+                                </span>
+                            </div>
+                        </div>
+                        <p className="mt-2 max-w-3xl text-sm text-slate-500">
+                            View and manage your assigned subjects for the current semester.
+                        </p>
                     </div>
 
-                    <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 px-4 py-3 gap-3">
-                            <p className="text-sm font-semibold text-slate-900">Enrolled Subjects</p>
-                            <div className="flex items-center gap-3">
+                    <div className="mt-6 flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                        <form method="GET" action={subjectsUrl} className="w-full xl:flex-1">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-3xl">
                                 {availableTerms.length > 0 && (
-                                    <label className="text-xs text-slate-600">
-                                        <span className="mr-2">Filter by Term:</span>
+                                    <label className="block">
+                                        <span className="sr-only">Filter by Term</span>
                                         <select
+                                            name="term"
                                             value={localSelectedTerm}
                                             onChange={handleTermChange}
                                             disabled={isLoading}
-                                            className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            className="w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 disabled:opacity-50"
                                         >
                                             {availableTerms.map((term) => (
-                                                <option key={term.id} value={term.id}>
+                                                <option key={term.value} value={term.value}>
                                                     {term.label}
                                                 </option>
                                             ))}
                                         </select>
                                     </label>
                                 )}
-                                <p className="text-xs text-slate-500">
-                                    {subjectPagination?.total || subjectItems.length} total records
-                                </p>
                             </div>
-                        </div>
+                        </form>
 
+                        <div className="flex shrink-0 xl:pt-1">
+                            <span className="inline-flex items-center justify-center rounded-md bg-slate-100 px-3 py-1.5 text-xs font-semibold whitespace-nowrap text-slate-700">
+                                {subjectPagination?.total || subjectItems.length} total records
+                            </span>
+                        </div>
+                    </div>
+
+                    <section className="mt-6 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                         <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-slate-200 text-xs">
+                            <table className="min-w-full divide-y divide-slate-200 text-sm">
                                 <thead className="bg-slate-50">
                                     <tr>
-                                        <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Course Code</th>
-                                        <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Course Description</th>
-                                        <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Units</th>
-                                        <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Section</th>
-                                        <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Schedule</th>
-                                        <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Days</th>
-                                        <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Room</th>
-                                        <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Term</th>
+                                        <th className="px-4 py-3 text-left font-semibold text-slate-600">Course Code</th>
+                                        <th className="px-4 py-3 text-left font-semibold text-slate-600">Course Description</th>
+                                        <th className="px-4 py-3 text-left font-semibold text-slate-600">Units</th>
+                                        <th className="px-4 py-3 text-left font-semibold text-slate-600">Section</th>
+                                        <th className="px-4 py-3 text-left font-semibold text-slate-600">Schedule</th>
+                                        <th className="px-4 py-3 text-left font-semibold text-slate-600">Days</th>
+                                        <th className="px-4 py-3 text-left font-semibold text-slate-600">Room</th>
+                                        <th className="px-4 py-3 text-left font-semibold text-slate-600">Term</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-200 bg-white">
-                                    {subjectItems.length > 0 ? (
+                                <tbody className="divide-y divide-slate-200 bg-white relative">
+                                    {isLoading ? (
+                                        <tr>
+                                            <td colSpan={8} className="px-4 py-12 text-center">
+                                                <div className="flex flex-col items-center gap-3">
+                                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                                                    <span className="text-sm font-medium text-blue-600">Loading...</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ) : subjectItems.length > 0 ? (
                                         subjectItems.map((subject, index) => (
                                             <tr key={`${subject.course_code}-${subject.course_description}-${index}`} className="hover:bg-slate-50 transition">
-                                                <td className="px-4 py-2.5 font-medium text-slate-900">{subject.course_code || '-'}</td>
-                                                <td className="px-4 py-2.5 text-slate-700">{subject.course_description || '-'}</td>
-                                                <td className="px-4 py-2.5 text-slate-700">{subject.course_units ?? '-'}</td>
-                                                <td className="px-4 py-2.5 text-slate-700">{subject.section_code || '-'}</td>
-                                                <td className="px-4 py-2.5 text-slate-700">{subject.schedule_time || '-'}</td>
-                                                <td className="px-4 py-2.5 text-slate-700">{subject.schedule_days || '-'}</td>
-                                                <td className="px-4 py-2.5 text-slate-700">{subject.room || '-'}</td>
-                                                <td className="px-4 py-2.5 text-slate-700">
+                                                <td className="px-4 py-3 font-medium text-slate-900">{subject.course_code || '-'}</td>
+                                                <td className="px-4 py-3 text-slate-700">{subject.course_description || '-'}</td>
+                                                <td className="px-4 py-3 text-slate-700">{subject.course_units ?? '-'}</td>
+                                                <td className="px-4 py-3 text-slate-700">{subject.section_code || '-'}</td>
+                                                <td className="px-4 py-3 text-slate-700">{subject.schedule_time || '-'}</td>
+                                                <td className="px-4 py-3 text-slate-700">{subject.schedule_days || '-'}</td>
+                                                <td className="px-4 py-3 text-slate-700">{subject.room || '-'}</td>
+                                                <td className="px-4 py-3 text-slate-700">
                                                     {subject.term || subject.semester || (subject.school_year_id ? `SY #${subject.school_year_id}` : '-')}
                                                 </td>
                                             </tr>
@@ -273,14 +302,11 @@ export default function SubjectsPage({
                                     ) : (
                                         <tr>
                                             <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
-                                                {isLoading ? (
-                                                    <div className="flex items-center justify-center gap-2">
-                                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                                                        <span>Loading...</span>
-                                                    </div>
-                                                ) : (
-                                                    'No enrolled subjects found.'
-                                                )}
+                                                <div className="bg-slate-50 border border-slate-200 rounded-lg p-8 max-w-2xl text-center shadow-sm mx-auto">
+                                                    <p className="text-sm text-slate-500">
+                                                        No subjects found for the selected term.
+                                                    </p>
+                                                </div>
                                             </td>
                                         </tr>
                                     )}
@@ -288,7 +314,7 @@ export default function SubjectsPage({
                             </table>
                         </div>
 
-                        {Pagination}
+                        {!isLoading && Pagination}
                     </section>
                 </div>
             </main>

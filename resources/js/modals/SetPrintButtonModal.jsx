@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 
@@ -14,6 +14,9 @@ export default function SetPrintButtonModal({
     const [isGenerating, setIsGenerating] = useState(false);
     const [subjectsWithSubmissions, setSubjectsWithSubmissions] = useState([]);
     const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [filteredSubjects, setFilteredSubjects] = useState([]);
+    const searchTimeoutRef = useRef(null);
 
     // Fetch submissions for each subject when modal opens
     useEffect(() => {
@@ -118,6 +121,7 @@ export default function SetPrintButtonModal({
             );
             
             setSubjectsWithSubmissions(subjectsWithData);
+            setFilteredSubjects(subjectsWithData);
         } catch (err) {
             console.error('Error fetching subject data:', err);
             toast.error('Failed to load submission data. Please try again.', {
@@ -130,19 +134,58 @@ export default function SetPrintButtonModal({
                 total_students: 0
             }));
             setSubjectsWithSubmissions(subjectsWithDefault);
+            setFilteredSubjects(subjectsWithDefault);
         } finally {
             setIsLoadingDetails(false);
         }
     };
+
+    // Handle search with debounce (client-side since subjects are already loaded)
+    const handleSearchChange = useCallback((e) => {
+        const query = e.target.value;
+        setSearchQuery(query);
+        
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+        }
+        
+        searchTimeoutRef.current = setTimeout(() => {
+            if (!query.trim()) {
+                setFilteredSubjects(subjectsWithSubmissions);
+                return;
+            }
+            
+            const filtered = subjectsWithSubmissions.filter(subject =>
+                subject.course_code?.toLowerCase().includes(query.toLowerCase()) ||
+                subject.course_description?.toLowerCase().includes(query.toLowerCase()) ||
+                subject.year_section?.toLowerCase().includes(query.toLowerCase())
+            );
+            setFilteredSubjects(filtered);
+        }, 300);
+    }, [subjectsWithSubmissions]);
 
     // Reset when modal closes
     useEffect(() => {
         if (!isOpen) {
             setSelectedSubjects([]);
             setSubjectsWithSubmissions([]);
+            setFilteredSubjects([]);
+            setSearchQuery('');
             setIsGenerating(false);
+            if (searchTimeoutRef.current) {
+                clearTimeout(searchTimeoutRef.current);
+            }
         }
     }, [isOpen]);
+
+    // Cleanup timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (searchTimeoutRef.current) {
+                clearTimeout(searchTimeoutRef.current);
+            }
+        };
+    }, []);
 
     const handleSubjectToggle = (subjectId) => {
         setSelectedSubjects(prev => 
@@ -153,10 +196,10 @@ export default function SetPrintButtonModal({
     };
 
     const handleSelectAll = () => {
-        if (selectedSubjects.length === subjectsWithSubmissions.length) {
+        if (selectedSubjects.length === filteredSubjects.length) {
             setSelectedSubjects([]);
         } else {
-            setSelectedSubjects(subjectsWithSubmissions.map(s => s.id));
+            setSelectedSubjects(filteredSubjects.map(s => s.id));
         }
     };
 
@@ -205,9 +248,7 @@ export default function SetPrintButtonModal({
             
             if (pdfUrl) {
                 toast.dismiss(loadingToastId);
-                
                 window.open(pdfUrl, '_blank');
-                
                 toast.success(`${selectedSubjects.length} subject(s), ${totalStudents} evaluation(s) - PDF opening...`, {
                     position: "top-right",
                     autoClose: 3000,
@@ -242,7 +283,7 @@ export default function SetPrintButtonModal({
 
     if (!isOpen) return null;
 
-    const displaySubjects = subjectsWithSubmissions.length > 0 ? subjectsWithSubmissions : subjects;
+    const displaySubjects = filteredSubjects.length > 0 ? filteredSubjects : subjectsWithSubmissions;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4">
@@ -286,6 +327,29 @@ export default function SetPrintButtonModal({
                         </div>
                     )}
 
+                    {/* Search Bar */}
+                    {!isLoadingDetails && subjectsWithSubmissions.length > 0 && (
+                        <div className="mb-4">
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    placeholder="Search by course code, description, or section..."
+                                    value={searchQuery}
+                                    onChange={handleSearchChange}
+                                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 pl-9 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                                />
+                                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                            </div>
+                            {searchQuery && (
+                                <div className="mt-1 text-xs text-slate-500">
+                                    Found {displaySubjects.length} subject(s)
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {/* Select All Button */}
                     {displaySubjects.length > 0 && !isLoadingDetails && (
                         <div className="mb-4 flex items-center justify-between">
@@ -305,7 +369,7 @@ export default function SetPrintButtonModal({
                     <div className="max-h-96 overflow-y-auto border border-slate-200 rounded-lg">
                         {displaySubjects.length === 0 ? (
                             <div className="p-8 text-center text-slate-500">
-                                No subjects available to print.
+                                {searchQuery ? 'No subjects match your search.' : 'No subjects available to print.'}
                             </div>
                         ) : (
                             <table className="min-w-full divide-y divide-slate-200">

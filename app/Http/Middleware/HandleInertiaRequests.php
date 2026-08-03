@@ -116,7 +116,7 @@ class HandleInertiaRequests extends Middleware
         return method_exists($user, 'isUnitHead') && $user->isUnitHead();
     }
 
-    protected function getAssignedEvaluationInstructorIdNos($user, int $schoolYearId): array
+        protected function getAssignedEvaluationInstructorIdNos($user, int $schoolYearId): array
     {
         if ($user->isDean()) {
             return [];
@@ -131,6 +131,7 @@ class HandleInertiaRequests extends Middleware
             $idNos = User::query()
                 ->whereHas('unitHead')
                 ->where('college_id', $associateDean->college_id)
+                ->where('id', '!=', $user->id)
                 ->pluck('id_no')
                 ->filter()
                 ->unique()
@@ -150,6 +151,7 @@ class HandleInertiaRequests extends Middleware
                 ->where('unit_id', $unitHead->unit_id)
                 ->whereNotNull('id_no')
                 ->where('id_no', '!=', '')
+                ->where('id', '!=', $user->id)
                 ->pluck('id_no')
                 ->filter()
                 ->unique()

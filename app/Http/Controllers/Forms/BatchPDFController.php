@@ -9,13 +9,20 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use App\Models\User;
+use App\Models\FacultyDevelopmentForm;
 use TCPDF;
+use Carbon\Carbon;
 
 class BatchPDFController extends Controller
 {
     /**
-     * Generate batch PDF for multiple subjects
+     * ================================================================
+     * SECTION 1: STUDENT EVALUATION OF TEACHERS (SET) - BATCH GENERATION
+     * ================================================================
+     * This generates batch PDFs for Student Evaluation of Teachers (SET)
+     * Used for: Student evaluation forms for faculty
      * POST /student-evaluation/pdf/batch-generate
+     * ================================================================
      */
     public function generateBatch(Request $request)
     {
@@ -161,9 +168,963 @@ class BatchPDFController extends Controller
             'file_size_kb' => round($fileSize / 1024, 2)
         ]);
     }
-    
+
+    /**
+     * ================================================================
+     * SECTION 2: SUPERVISOR EVALUATION OF FACULTY (SEF) - BATCH GENERATION
+     * ================================================================
+     * This generates batch PDFs for Supervisor Evaluation of Faculty (SEF)
+     * Used for: Supervisor/head evaluation forms for faculty
+     * POST /sef/pdf/generate
+     * ================================================================
+     */
+    public function generateSEF(Request $request)
+    {
+        set_time_limit(300);
+        ini_set('memory_limit', '512M');
+        
+        $validated = $request->validate([
+            'term_id' => 'required|string',
+            'faculty_list' => 'required|array',
+            'school_year_label' => 'nullable|string'
+        ]);
+        
+        $termId = $validated['term_id'];
+        $facultyList = $validated['faculty_list'];
+        $schoolYearLabel = $validated['school_year_label'] ?? '';
+        
+        // Get the supervisor evaluation controller instance
+        $sefController = new SupervisorEvaluationPDF();
+        
+        // Generate PDF for each faculty and combine
+        $pdf = new TCPDF('P', 'mm', 'LEGAL', true, 'UTF-8', false);
+        $pdf->setPrintHeader(false);
+        $pdf->setPrintFooter(false);
+        $pdf->SetMargins(13, 26, 13);
+        $pdf->SetAutoPageBreak(false, 26);
+        $pdf->SetCompression(true);
+        
+        // Register fonts
+        $sefController->registerFonts();
+        
+        $totalPages = 0;
+        $generatedCount = 0;
+        
+        // Get benchmark statements and term details
+        $statements = $sefController->getBenchmarkStatements();
+        $termDetails = $sefController->getTermDetails($termId);
+        
+        foreach ($facultyList as $facultyData) {
+            $facultyId = $facultyData['employee_id_no'] ?? null;
+            if (!$facultyId) continue;
+            
+            // ✅ Get the SEF data properly
+            $sefResponse = $sefController->getFacultySefData($facultyId, new Request(['term_id' => $termId]));
+            $sefData = $sefResponse->getData(true); // Convert JSON response to array
+            
+            // ✅ Check if we have data
+            if (!$sefData || !($sefData['has_data'] ?? false)) {
+                continue;
+            }
+            
+            // Get faculty college info
+            $facultyInfo = User::with(['college', 'unit'])
+                ->where('id_no', $facultyId)
+                ->first();
+            
+            $collegeName = $facultyInfo?->college?->name ?? '';
+            $departmentName = $facultyInfo?->unit?->name ?? '';
+            $collegeDepartment = collect([$collegeName, $departmentName])->filter()->implode(' / ');
+            
+            if (empty($collegeDepartment)) {
+                $collegeDepartment = $facultyData['department'] ?? $facultyData['college'] ?? 'College of Arts and Sciences';
+            }
+            
+            // ✅ Get ratings from the SEF data
+            $ratings = $sefData['ratings_breakdown'] ?? $sefData['details']['ratings_breakdown'] ?? array_fill(0, 15, 0);
+            
+            // ✅ Get comments
+            $comments = $facultyData['comments'] ?? $sefData['comments'] ?? '';
+            
+            // Prepare data for the template
+            $templateData = [
+                'faculty_name' => $facultyData['instructor'] ?? $facultyData['faculty_name'] ?? '',
+                'college' => $collegeDepartment,
+                'course_code' => $facultyData['course_code'] ?? '',
+                'course_title' => $facultyData['course_title'] ?? '',
+                'program_level' => $facultyData['program_level'] ?? 'Undergraduate',
+                'semester' => $termId,
+                'academic_year' => $termDetails['academic_year_display'] ?? '',
+                'ratings' => $ratings,
+                'comments' => $comments,
+                'evaluator_name' => $facultyData['evaluator_name'] ?? 'Supervisor',
+                'evaluator_id' => $facultyData['evaluator_id'] ?? '',
+                'date' => date('F j, Y')
+            ];
+            
+            // Add page and generate form
+            $pdf->AddPage();
+            $sefController->addWatermark($pdf);
+            $sefController->generateSEFForm($pdf, $templateData, 13, 26, $termDetails, $statements);
+            $totalPages++;
+            $generatedCount++;
+        }
+        
+        if ($totalPages === 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No SEF data found for the selected faculty.'
+            ], 404);
+        }
+        
+        // Generate and save PDF
+        $pdfOutput = $pdf->Output('', 'S');
+        $filename = 'sef_batch_' . time() . '.pdf';
+        $filepath = 'temp/pdf/' . $filename;
+        Storage::disk('local')->put($filepath, $pdfOutput);
+        
+        return response()->json([
+            'success' => true,
+            'pdf_url' => route('pdf.display', ['filename' => $filename]),
+            'message' => "SEF report generated successfully",
+            'total_pages' => $totalPages,
+            'generated_count' => $generatedCount
+        ]);
+    }
+
+    /**
+     * ================================================================
+     * SECTION 3: INDIVIDUAL FACULTY EVALUATION (IFE) - BATCH GENERATION
+     * ================================================================
+     * This generates batch PDFs for Individual Faculty Evaluation (IFE)
+     * Used for: Combined SET + SEF evaluation forms for faculty
+     * POST /individual-faculty-evaluation/pdf/generate
+     * ================================================================
+     */
+    public function generateIFE(Request $request)
+    {
+        set_time_limit(300);
+        ini_set('memory_limit', '512M');
+        
+        $validated = $request->validate([
+            'term_id' => 'required|string',
+            'faculty_list' => 'required|array',
+            'school_year_label' => 'nullable|string'
+        ]);
+        
+        $termId = $validated['term_id'];
+        $facultyList = $validated['faculty_list'];
+        $schoolYearLabel = $validated['school_year_label'] ?? '';
+        
+        // Use the existing IndividualFacultyEvaluationPDF controller
+        $ifeController = new IndividualFacultyEvaluationPDF();
+        
+        // Register fonts
+        $ifeController->registerFonts();
+        
+        // Create PDF
+        $pdf = new TCPDF('P', 'mm', 'LEGAL', true, 'UTF-8', false);
+        $pdf->setPrintHeader(false);
+        $pdf->setPrintFooter(false);
+        $pdf->SetMargins(13, 26, 13);
+        $pdf->SetAutoPageBreak(false, 26);
+        $pdf->SetCompression(true);
+        
+        // Get logged-in user for signature
+        $loggedInUser = auth()->user();
+        $preparedByName = $loggedInUser ? trim(($loggedInUser->firstname ?? '') . ' ' . ($loggedInUser->lastname ?? '')) : 'Staff';
+        
+        // Get term details
+        $termDetails = $ifeController->getTermDetails($termId);
+        
+        $totalPages = 0;
+        $generatedCount = 0;
+        
+        // Get the IFE Data Controller for SET data
+        $dataController = new \App\Http\Controllers\Forms\IFE\IFEDataController();
+        
+        foreach ($facultyList as $facultyData) {
+            $facultyId = $facultyData['employee_id_no'] ?? null;
+            if (!$facultyId) continue;
+            
+            // Get faculty info
+            $facultyInfo = User::with(['college', 'unit'])
+                ->where('id_no', $facultyId)
+                ->first();
+            
+            $collegeName = $facultyInfo?->college?->name ?? '';
+            $departmentName = $facultyInfo?->unit?->name ?? '';
+            $academicRank = $facultyInfo?->academic_rank ?? 'N/A';
+            $collegeDepartment = collect([$departmentName, $collegeName])->filter()->implode(' / ');
+            
+            if (empty($collegeDepartment)) {
+                $collegeDepartment = $facultyData['department'] ?? $facultyData['college'] ?? 'N/A';
+            }
+            
+            // Get SET data from IFEDataController
+            $facultyFullData = $dataController->getFacultyData($facultyId, (int) $termId);
+            
+            // Get SEF data using batchReports from SupervisorEvaluationPDF
+            $sefController = new SupervisorEvaluationPDF();
+            $batchRequest = new Request([
+                'term_id' => $termId,
+                'faculty_ids' => [$facultyId]
+            ]);
+            $batchResponse = $sefController->batchReports($batchRequest);
+            $batchData = $batchResponse->getData(true);
+            
+            // Check if we have SEF data
+            if (!isset($batchData[$facultyId]) || !$batchData[$facultyId]['has_data']) {
+                continue;
+            }
+            
+            $sefData = $batchData[$facultyId];
+            $sefRatings = $sefData['ratings_breakdown'] ?? array_fill(0, 15, 0);
+            $sefComments = $sefData['comments'] ?? '';
+            $overallSefRating = $sefData['overall_sef_rating'] ?? null;
+            
+            // Prepare SET data
+            $setData = [
+                'rows' => $facultyFullData['set_data']['rows'] ?? [],
+                'overall_rating' => $facultyFullData['set_data']['overall_rating'] ?? null,
+                'comments' => $facultyFullData['comments']['student'] ?? []
+            ];
+            
+            // Get supervisor comments
+            $supervisorComments = $facultyFullData['comments']['supervisor'] ?? [];
+            
+            // Get dean and associate dean names
+            $deanName = $facultyFullData['faculty_info']['dean_name'] ?? '';
+            $associateDeanName = $facultyFullData['faculty_info']['associate_dean_name'] ?? '';
+            $facultyName = $facultyData['instructor'] ?? $facultyFullData['faculty_info']['name'] ?? 'Faculty Member';
+            
+            // Generate IFE page
+            $pdf->AddPage();
+            $ifeController->addWatermark($pdf);
+            
+            // Prepare data for IFE template (matches IndividualFacultyEvaluationPDF::generateIFEForm)
+            $ifeTemplateData = [
+                'faculty_name' => $facultyName,
+                'college' => $collegeDepartment,
+                'academic_rank' => $academicRank,
+                'dean_name' => $deanName,
+                'associate_dean_name' => $associateDeanName,
+                'set_rows' => $setData['rows'],
+                'overall_set_rating' => $setData['overall_rating'],
+                'overall_sef_rating' => $overallSefRating,
+                'student_comments' => $setData['comments'],
+                'supervisor_comments' => $supervisorComments,
+                'prepared_by' => $preparedByName,
+                'term' => $termId,
+                'term_details' => $termDetails,
+                'date' => date('F j, Y'),
+                'ratings_breakdown' => $sefRatings,
+                'sef_comments' => $sefComments
+            ];
+            
+            // Use the full IFE template from IndividualFacultyEvaluationPDF
+            $ifeController->generateIFEForm($pdf, $ifeTemplateData, 13, 26, $termDetails);
+            
+            $totalPages++;
+            $generatedCount++;
+        }
+        
+        if ($totalPages === 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No IFE data found for the selected faculty.'
+            ], 404);
+        }
+        
+        $pdfOutput = $pdf->Output('', 'S');
+        $filename = 'ife_batch_' . time() . '.pdf';
+        $filepath = 'temp/pdf/' . $filename;
+        Storage::disk('local')->put($filepath, $pdfOutput);
+        
+        return response()->json([
+            'success' => true,
+            'pdf_url' => route('pdf.display', ['filename' => $filename]),
+            'message' => "IFE reports generated successfully for {$generatedCount} faculty members",
+            'total_pages' => $totalPages,
+            'generated_count' => $generatedCount
+        ]);
+    }
+
+    /**
+     * ================================================================
+     * SECTION 4: FACULTY EVALUATION DEVELOPMENT ACKNOWLEDGMENT (FEDA) - BATCH GENERATION
+     * ================================================================
+     * This generates batch PDFs for Faculty Evaluation Development Acknowledgment (FEDA)
+     * Used for: Final acknowledgment forms requiring SET + SEF + FEDA submitted
+     * POST /feda/pdf/generate
+     * ================================================================
+     */
+    public function generateFEDA(Request $request)
+    {
+        set_time_limit(300);
+        ini_set('memory_limit', '512M');
+        
+        $validated = $request->validate([
+            'term_id' => 'required|string',
+            'faculty_list' => 'required|array',
+            'school_year_label' => 'nullable|string'
+        ]);
+        
+        $termId = $validated['term_id'];
+        $facultyList = $validated['faculty_list'];
+        $schoolYearLabel = $validated['school_year_label'] ?? '';
+        
+        $pdf = new TCPDF('P', 'mm', 'LEGAL', true, 'UTF-8', false);
+        $pdf->setPrintHeader(false);
+        $pdf->setPrintFooter(false);
+        $pdf->SetMargins(13, 26, 13);
+        $pdf->SetAutoPageBreak(false, 26);
+        $pdf->SetCompression(true);
+        
+        $this->registerFonts();
+        
+        // Get controllers
+        $dataController = new \App\Http\Controllers\Forms\IFE\IFEDataController();
+        $sefController = new SupervisorEvaluationPDF();
+        $fedaFormController = new FacultyEvaluationDevelopmentAcknowledgmentPDF();
+        
+        // Get logged-in user for program head name
+        $loggedInUser = auth()->user();
+        $programHeadName = '';
+        $evaluatorNameDisplay = 'Supervisor';
+        
+        if ($loggedInUser) {
+            $evaluatorNameDisplay = trim(($loggedInUser->firstname ?? '') . ' ' . ($loggedInUser->lastname ?? ''));
+            if (empty($evaluatorNameDisplay)) {
+                $evaluatorNameDisplay = $loggedInUser->name ?? 'Supervisor';
+            }
+            
+            // Check if the logged-in user is a unit head
+            $isUnitHead = method_exists($loggedInUser, 'isUnitHead') && $loggedInUser->isUnitHead();
+            if (!$isUnitHead) {
+                $isUnitHead = in_array($loggedInUser->role ?? '', ['unit_head', 'department_head', 'program_head']);
+            }
+            
+            if ($isUnitHead) {
+                $programHeadName = $evaluatorNameDisplay;
+            } else {
+                $programHeadName = $evaluatorNameDisplay;
+            }
+        }
+        
+        // Get term details
+        $termDetails = $this->getTermDetails($termId);
+        
+        $totalPages = 0;
+        $generatedCount = 0;
+        
+        foreach ($facultyList as $facultyData) {
+            $facultyId = $facultyData['employee_id_no'] ?? null;
+            if (!$facultyId) continue;
+            
+            // ✅ CHECK FEDA SUBMISSION FROM DATABASE
+            $fedaSubmitted = \App\Models\FacultyDevelopmentForm::hasSubmittedFormFor($facultyId, $termId);
+            if (!$fedaSubmitted) {
+                Log::info("FEDA not submitted for faculty {$facultyId} in term {$termId}");
+                continue;
+            }
+            
+            // ✅ FETCH FEDA DEVELOPMENT PLAN FROM DATABASE
+            $fedaForm = \App\Models\FacultyDevelopmentForm::where('id_no', $facultyId)
+                ->where('term_id', $termId)
+                ->first();
+            
+            // ✅ Build the development plan array
+            $developmentPlan = [
+                'areas_for_improvement' => $fedaForm?->areas_for_improvement ?? '',
+                'proposed_activities' => $fedaForm?->proposed_learning_and_development_activities ?? '',
+                'action_plan' => $fedaForm?->action_plan ?? ''
+            ];
+            
+            Log::info("FEDA Development Plan for {$facultyId}", $developmentPlan);
+            
+            // Get data using IFEDataController
+            $facultyFullData = $dataController->getFacultyData($facultyId, (int) $termId);
+            
+            // Get SEF data
+            $sefRequest = new Request(['term_id' => $termId]);
+            $sefResponse = $sefController->getFacultySefData($facultyId, $sefRequest);
+            $sefData = $sefResponse->getData(true);
+            
+            // Get faculty info for college
+            $facultyInfo = User::with(['college', 'unit'])
+                ->where('id_no', $facultyId)
+                ->first();
+            
+            $collegeName = $facultyInfo?->college?->name ?? '';
+            $departmentName = $facultyInfo?->unit?->name ?? '';
+            $academicRank = $facultyInfo?->academic_rank ?? '';
+            $collegeDepartment = collect([$departmentName, $collegeName])->filter()->implode(' / ');
+            
+            if (empty($collegeDepartment)) {
+                $collegeDepartment = $facultyData['department'] ?? $facultyData['college'] ?? 'College of Arts and Sciences';
+            }
+            
+            // Get overall SET rating
+            $overallSetRating = $fedaFormController->getFacultyOverallSetRating(
+                $facultyId, 
+                $facultyData['instructor'] ?? '', 
+                (int) $termId
+            );
+            
+            // Get overall SEF rating
+            $overallSefRating = $fedaFormController->getFacultyOverallSefRating($facultyId, (int) $termId);
+            
+            // Use SEF data if available, otherwise use fallback
+            if ($sefData && ($sefData['has_data'] ?? false)) {
+                $sefRatings = $sefData['ratings_breakdown'] ?? array_fill(0, 15, 0);
+                $sefComments = $sefData['comments'] ?? '';
+                $overallSefRating = $sefData['overall_sef_rating'] ?? $overallSefRating;
+            } else {
+                // Use ratings from faculty data if provided
+                $sefRatings = $facultyData['ratings_breakdown'] ?? array_fill(0, 15, 0);
+                $sefComments = $facultyData['comments'] ?? '';
+            }
+            
+            // ✅ CRITICAL FIX: Build the data array with 'development_plan' key
+            $pdfData = [
+                'faculty_name' => $facultyData['instructor'] ?? $facultyFullData['faculty_info']['name'] ?? 'Faculty Member',
+                'faculty_id_no' => $facultyId,
+                'college' => $collegeDepartment,
+                'academic_rank' => $academicRank,
+                'evaluator_name' => 'Supervisor',
+                'evaluator_id' => '',
+                'ratings' => $sefRatings,  // ✅ This should be 'ratings' not 'sef_ratings'
+                'comments' => $sefComments,
+                'overall_set_rating' => $overallSetRating,
+                'overall_sef_rating' => $overallSefRating,
+                // ✅ DEVELOPMENT PLAN MUST BE UNDER 'development_plan' KEY
+                'development_plan' => $developmentPlan,  // ✅ This is the key change!
+                'program_head_name' => $programHeadName,
+                'evaluator_name_display' => $evaluatorNameDisplay,
+                'term' => $termId,
+                'school_year_label' => $schoolYearLabel,
+                'date' => Carbon::now()->format('F j, Y'),
+                'term_details' => $termDetails
+            ];
+            
+            // Log the data to verify
+            Log::info("FEDA PDF Data for {$facultyId}", [
+                'development_plan' => $pdfData['development_plan'],
+                'overall_set_rating' => $pdfData['overall_set_rating'],
+                'overall_sef_rating' => $pdfData['overall_sef_rating']
+            ]);
+            
+            // Generate FEDA page
+            $pdf->AddPage();
+            $this->addWatermark($pdf);
+            
+            // ✅ Use the FEDA form generation method
+            $fedaFormController->generateFEDAForm($pdf, $pdfData, 13, 26, $termDetails);
+            
+            $totalPages++;
+            $generatedCount++;
+        }
+        
+        if ($totalPages === 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No FEDA data found for the selected faculty.'
+            ], 404);
+        }
+        
+        $pdfOutput = $pdf->Output('', 'S');
+        $filename = 'feda_batch_' . time() . '.pdf';
+        $filepath = 'temp/pdf/' . $filename;
+        Storage::disk('local')->put($filepath, $pdfOutput);
+        
+        return response()->json([
+            'success' => true,
+            'pdf_url' => route('pdf.display', ['filename' => $filename]),
+            'message' => "FEDA reports generated successfully for {$generatedCount} faculty members",
+            'total_pages' => $totalPages,
+            'generated_count' => $generatedCount
+        ]);
+    }
+
+    /**
+     * ================================================================
+     * SECTION 5: ALL REPORTS COMBINED (SEF + IFE + FEDA) - BATCH GENERATION
+     * ================================================================
+     * This generates a single PDF containing SEF, IFE, and FEDA for each faculty
+     * Used for: Complete evaluation package for faculty
+     * POST /reports/print-all/generate
+     * ================================================================
+     */
+    public function generateAll(Request $request)
+    {
+        set_time_limit(300);
+        ini_set('memory_limit', '512M');
+        
+        $validated = $request->validate([
+            'term_id' => 'required|string',
+            'faculty_list' => 'required|array',
+            'school_year_label' => 'nullable|string'
+        ]);
+        
+        $termId = $validated['term_id'];
+        $facultyList = $validated['faculty_list'];
+        $schoolYearLabel = $validated['school_year_label'] ?? '';
+        
+        $pdf = new TCPDF('P', 'mm', 'LEGAL', true, 'UTF-8', false);
+        $pdf->setPrintHeader(false);
+        $pdf->setPrintFooter(false);
+        $pdf->SetMargins(13, 26, 13);
+        $pdf->SetAutoPageBreak(false, 26);
+        $pdf->SetCompression(true);
+        
+        $this->registerFonts();
+        
+        // Get controllers - we'll use their full template methods
+        $dataController = new \App\Http\Controllers\Forms\IFE\IFEDataController();
+        $sefController = new SupervisorEvaluationPDF();
+        $ifeController = new IndividualFacultyEvaluationPDF();
+        $fedaController = new FacultyEvaluationDevelopmentAcknowledgmentPDF();
+        
+        // Get logged-in user for signatures
+        $loggedInUser = auth()->user();
+        $preparedByName = $loggedInUser ? trim(($loggedInUser->firstname ?? '') . ' ' . ($loggedInUser->lastname ?? '')) : 'Staff';
+        $programHeadName = $preparedByName;
+        $evaluatorNameDisplay = $preparedByName;
+        
+        // Get term details
+        $termDetails = $this->getTermDetails($termId);
+        
+        // Get benchmark statements for SEF
+        $sefStatements = $this->getBenchmarkStatements();
+        
+        $totalPages = 0;
+        $processedFaculty = 0;
+        
+        foreach ($facultyList as $facultyData) {
+            $facultyId = $facultyData['employee_id_no'] ?? null;
+            if (!$facultyId) continue;
+            
+            // Get data using IFEDataController
+            $facultyFullData = $dataController->getFacultyData($facultyId, (int) $termId);
+            
+            // Get SEF data using batchReports
+            $batchRequest = new Request([
+                'term_id' => $termId,
+                'faculty_ids' => [$facultyId]
+            ]);
+            $batchResponse = $sefController->batchReports($batchRequest);
+            $batchData = $batchResponse->getData(true);
+            
+            // Check if we have SEF data
+            if (!isset($batchData[$facultyId]) || !$batchData[$facultyId]['has_sef_data']) {
+                continue;
+            }
+            
+            // Get the SEF data for this faculty
+            $sefData = $batchData[$facultyId];
+            
+            // Check FEDA status
+            $fedaSubmitted = $sefData['feda_submitted'] ?? false;
+            
+            // Get faculty info
+            $facultyInfo = User::with(['college', 'unit'])
+                ->where('id_no', $facultyId)
+                ->first();
+            
+            $collegeName = $facultyInfo?->college?->name ?? '';
+            $departmentName = $facultyInfo?->unit?->name ?? '';
+            $academicRank = $facultyInfo?->academic_rank ?? '';
+            $collegeDepartment = collect([$departmentName, $collegeName])->filter()->implode(' / ');
+            
+            if (empty($collegeDepartment)) {
+                $collegeDepartment = $facultyData['department'] ?? $facultyData['college'] ?? 'College of Arts and Sciences';
+            }
+            
+            // Prepare SET data for IFE
+            $setData = [
+                'rows' => $facultyFullData['set_data']['rows'] ?? [],
+                'overall_rating' => $facultyFullData['set_data']['overall_rating'] ?? null,
+                'comments' => $facultyFullData['comments']['student'] ?? []
+            ];
+            
+            // Prepare SEF comments
+            $sefComments = $facultyFullData['comments']['supervisor'] ?? [];
+            
+            // Get ratings breakdown from batch data
+            $sefRatings = $sefData['ratings_breakdown'] ?? array_fill(0, 15, 0);
+            $sefComments = $sefData['comments'] ?? '';
+            
+            // ============================================
+            // 1. SEF REPORT - Use the FULL template from SupervisorEvaluationPDF
+            // ============================================
+            $pdf->AddPage();
+            $this->addWatermark($pdf);
+            
+            // Prepare data for SEF template
+            $sefTemplateData = [
+                'faculty_name' => $facultyData['instructor'] ?? $facultyFullData['faculty_info']['name'] ?? '',
+                'college' => $collegeDepartment,
+                'course_code' => $facultyData['course_code'] ?? '',
+                'course_title' => $facultyData['course_title'] ?? '',
+                'program_level' => $facultyData['program_level'] ?? '',
+                'semester' => $termId,
+                'academic_year' => $termDetails['academic_year_display'],
+                'ratings' => $sefRatings,
+                'comments' => $sefComments,
+                'evaluator_name' => 'Supervisor',
+                'evaluator_id' => '',
+                'date' => Carbon::now()->format('F j, Y')
+            ];
+            
+            // Use the full SEF template from SupervisorEvaluationPDF
+            $sefController->generateSEFForm($pdf, $sefTemplateData, 13, 26, $termDetails, $sefStatements);
+            $totalPages++;
+            
+            // ============================================
+            // 2. IFE REPORT - Use the FULL template from IndividualFacultyEvaluationPDF
+            // ============================================
+            if (!empty($facultyFullData)) {
+                $pdf->AddPage();
+                $this->addWatermark($pdf);
+                
+                // Prepare data for IFE template
+                $ifeTemplateData = [
+                    'faculty_name' => $facultyData['instructor'] ?? $facultyFullData['faculty_info']['name'] ?? '',
+                    'college' => $collegeDepartment,
+                    'academic_rank' => $academicRank,
+                    'dean_name' => $facultyFullData['faculty_info']['dean_name'] ?? '',
+                    'associate_dean_name' => $facultyFullData['faculty_info']['associate_dean_name'] ?? '',
+                    'set_rows' => $setData['rows'],
+                    'overall_set_rating' => $setData['overall_rating'],
+                    'overall_sef_rating' => $sefData['overall_sef_rating'] ?? null,
+                    'student_comments' => $setData['comments'],
+                    'supervisor_comments' => $sefComments,
+                    'prepared_by' => $preparedByName,
+                    'semester' => $termId,
+                    'academic_year' => $termDetails['academic_year_display'],
+                    'date' => Carbon::now()->format('F j, Y'),
+                    'term_details' => $termDetails
+                ];
+                
+                // Use the full IFE template from IndividualFacultyEvaluationPDF
+                $ifeController->generateIFEForm($pdf, $ifeTemplateData, 13, 26, $termDetails);
+                $totalPages++;
+            }
+            
+            // ============================================
+            // 3. FEDA REPORT - Use the FULL template from FacultyEvaluationDevelopmentAcknowledgmentPDF
+            // ============================================
+            if ($fedaSubmitted) {
+                $pdf->AddPage();
+                $this->addWatermark($pdf);
+                
+                // ✅ FETCH DEVELOPMENT PLAN FROM DATABASE
+                // Fetch development plan from faculty_development_forms using fims connection
+                $developmentPlan = [
+                    'areas_for_improvement' => '',
+                    'proposed_activities' => '',
+                    'action_plan' => ''
+                ];
+
+                try {
+                    $fedaForm = \App\Models\FacultyDevelopmentForm::where('id_no', $facultyId)
+                        ->where('term_id', $termId)
+                        ->first();
+                    
+                    if ($fedaForm) {
+                        $developmentPlan = [
+                            'areas_for_improvement' => $fedaForm->areas_for_improvement ?? '',
+                            'proposed_activities' => $fedaForm->proposed_learning_and_development_activities ?? '',
+                            'action_plan' => $fedaForm->action_plan ?? ''
+                        ];
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Failed to fetch FEDA development plan: ' . $e->getMessage());
+                }
+                
+                // Also try to get from the faculty data if provided from frontend
+                if (empty($developmentPlan['areas_for_improvement']) && !empty($facultyData['areas_for_improvement'])) {
+                    $developmentPlan['areas_for_improvement'] = $facultyData['areas_for_improvement'];
+                }
+                if (empty($developmentPlan['proposed_activities']) && !empty($facultyData['proposed_activities'])) {
+                    $developmentPlan['proposed_activities'] = $facultyData['proposed_activities'];
+                }
+                if (empty($developmentPlan['action_plan']) && !empty($facultyData['action_plan'])) {
+                    $developmentPlan['action_plan'] = $facultyData['action_plan'];
+                }
+                
+                // Prepare data for FEDA template
+                $fedaTemplateData = [
+                    'faculty_name' => $facultyData['instructor'] ?? $facultyFullData['faculty_info']['name'] ?? '',
+                    'faculty_id_no' => $facultyId,
+                    'college' => $collegeDepartment,
+                    'academic_rank' => $academicRank,
+                    'course_code' => $facultyData['course_code'] ?? '',
+                    'course_title' => $facultyData['course_title'] ?? '',
+                    'program_level' => $facultyData['program_level'] ?? '',
+                    'semester' => $termId,
+                    'academic_year' => $termDetails['academic_year_display'],
+                    'ratings' => $sefRatings,
+                    'comments' => $sefComments,
+                    'evaluator_name' => 'Supervisor',
+                    'evaluator_id' => '',
+                    'date' => Carbon::now()->format('F j, Y'),
+                    'development_plan' => $developmentPlan,  // ✅ Now has data
+                    'program_head_name' => $programHeadName,
+                    'evaluator_name_display' => $evaluatorNameDisplay,
+                    'overall_set_rating' => $setData['overall_rating'] !== null ? number_format($setData['overall_rating'], 2) : 'N/A',
+                    'overall_sef_rating' => $sefData['overall_sef_rating'] !== null ? number_format($sefData['overall_sef_rating'], 2) : 'N/A',
+                ];
+                
+                // Log the data for debugging
+                Log::info('FEDA Template Data', [
+                    'faculty_name' => $fedaTemplateData['faculty_name'],
+                    'development_plan' => $fedaTemplateData['development_plan'],
+                    'overall_set_rating' => $fedaTemplateData['overall_set_rating'],
+                    'overall_sef_rating' => $fedaTemplateData['overall_sef_rating']
+                ]);
+                
+                // Use the full FEDA template from FacultyEvaluationDevelopmentAcknowledgmentPDF
+                $fedaController->generateFEDAForm($pdf, $fedaTemplateData, 13, 26, $termDetails);
+                $totalPages++;
+            }
+            $processedFaculty++;
+        }
+        
+        if ($totalPages === 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No report data found for the selected faculty.'
+            ], 404);
+        }
+        
+        $pdfOutput = $pdf->Output('', 'S');
+        $filename = 'all_reports_batch_' . time() . '.pdf';
+        $filepath = 'temp/pdf/' . $filename;
+        Storage::disk('local')->put($filepath, $pdfOutput);
+        
+        return response()->json([
+            'success' => true,
+            'pdf_url' => route('pdf.display', ['filename' => $filename]),
+            'message' => "All reports generated successfully for {$processedFaculty} faculty members",
+            'total_pages' => $totalPages,
+            'processed_faculty' => $processedFaculty
+        ]);
+    }
+
+    /**
+     * ================================================================
+     * SECTION 6: HELPER METHODS
+     * ================================================================
+     */
+
+    /**
+     * Check if FEDA is submitted for a faculty
+     * Used by: generateFEDA() and generateAll()
+     */
+    private function checkFedaSubmitted($facultyId, $termId)
+    {
+        try {
+            // Use the model's built-in method that checks submitted_at
+            return \App\Models\FacultyDevelopmentForm::hasSubmittedFormFor($facultyId, $termId);
+        } catch (\Exception $e) {
+            Log::error('Failed to check FEDA submission: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Generate SEF form page (Simple version for batch)
+     * Used by: generateSEF() and generateAll()
+     */
+    private function generateSEFFormPage($pdf, $data)
+    {
+        $pdf->SetFont('times', 'B', 14);
+        $pdf->Cell(0, 10, 'SUPERVISOR EVALUATION OF FACULTY (SEF)', 0, 1, 'C');
+        $pdf->Ln(5);
+        
+        $pdf->SetFont('times', '', 11);
+        $pdf->Cell(40, 6, 'Faculty: ' . $data['faculty_name'], 0, 1);
+        $pdf->Cell(40, 6, 'College/Department: ' . $data['college'], 0, 1);
+        $pdf->Cell(40, 6, 'Evaluator: ' . $data['evaluator_name'] . ' (' . $data['evaluator_id'] . ')', 0, 1);
+        $pdf->Cell(40, 6, 'Date: ' . $data['date'], 0, 1);
+        $pdf->Ln(5);
+        
+        // Ratings table
+        $pdf->SetFont('times', 'B', 10);
+        $pdf->Cell(120, 6, 'Benchmark Statements', 1, 0, 'C');
+        $pdf->Cell(60, 6, 'Rating', 1, 1, 'C');
+        
+        $pdf->SetFont('times', '', 9);
+        $statements = [
+            '1. Demonstrates mastery of subject matter',
+            '2. Organizes content logically',
+            '3. Uses effective teaching strategies',
+            '4. Engages students in learning',
+            '5. Provides constructive feedback',
+            '6. Shows enthusiasm for teaching',
+            '7. Communicates clearly',
+            '8. Uses appropriate assessment methods',
+            '9. Creates positive learning environment',
+            '10. Shows respect for students',
+            '11. Is accessible for consultation',
+            '12. Updates course materials',
+            '13. Uses technology effectively',
+            '14. Encourages critical thinking',
+            '15. Promotes independent learning'
+        ];
+        
+        foreach ($statements as $index => $statement) {
+            $rating = $data['ratings'][$index] ?? '-';
+            $pdf->Cell(120, 5, $statement, 1);
+            $pdf->Cell(60, 5, $rating, 1, 1, 'C');
+        }
+        
+        $pdf->Ln(5);
+        $pdf->SetFont('times', '', 10);
+        $pdf->MultiCell(0, 5, 'Comments: ' . ($data['comments'] ?? ''));
+    }
+
+    /**
+     * Generate IFE full page (Matches your IndividualFacultyEvaluationPDF layout)
+     * Used by: generateIFE() and generateAll()
+     */
+    private function generateIFEFullPage($pdf, $data)
+    {
+        // This is a simplified version - you should copy the full IFE layout
+        // from your IndividualFacultyEvaluationPDF::generateIFEForm() method
+        $pdf->SetFont('times', 'B', 14);
+        $pdf->Cell(0, 10, 'INDIVIDUAL FACULTY EVALUATION (IFE)', 0, 1, 'C');
+        $pdf->Ln(5);
+        
+        $pdf->SetFont('times', '', 11);
+        $pdf->Cell(40, 6, 'Faculty: ' . $data['faculty_name'], 0, 1);
+        $pdf->Cell(40, 6, 'College/Department: ' . $data['college'], 0, 1);
+        $pdf->Cell(40, 6, 'Academic Rank: ' . $data['academic_rank'], 0, 1);
+        $pdf->Cell(40, 6, 'Date: ' . $data['date'], 0, 1);
+        $pdf->Ln(5);
+        
+        // SET Rating Summary
+        $pdf->SetFont('times', 'B', 11);
+        $pdf->Cell(0, 6, 'Student Evaluation of Teaching (SET) Ratings:', 0, 1);
+        $pdf->SetFont('times', '', 9);
+        
+        $setRows = $data['set_rows'] ?? [];
+        if (!empty($setRows)) {
+            $pdf->Cell(30, 5, 'Course Code', 1);
+            $pdf->Cell(25, 5, 'Year/Section', 1);
+            $pdf->Cell(25, 5, 'Students', 1);
+            $pdf->Cell(30, 5, 'Avg Rating', 1);
+            $pdf->Cell(35, 5, 'Weighted Score', 1, 1);
+            
+            foreach ($setRows as $row) {
+                $pdf->Cell(30, 5, $row['course_code'] ?? '', 1);
+                $pdf->Cell(25, 5, $row['year_section'] ?? '', 1);
+                $pdf->Cell(25, 5, $row['student_count'] ?? '', 1);
+                $pdf->Cell(30, 5, $row['avg_set_rating'] ?? '', 1);
+                $pdf->Cell(35, 5, $row['weighted_score'] ?? '', 1, 1);
+            }
+        }
+        
+        $pdf->Ln(3);
+        $pdf->SetFont('times', 'B', 10);
+        $pdf->Cell(0, 5, 'Overall SET Rating: ' . ($data['overall_set_rating'] ?? 'N/A'), 0, 1);
+        $pdf->Cell(0, 5, 'Overall SEF Rating: ' . ($data['overall_sef_rating'] ?? 'N/A'), 0, 1);
+        
+        $pdf->Ln(3);
+        $pdf->SetFont('times', 'B', 11);
+        $pdf->Cell(0, 6, 'Comments:', 0, 1);
+        $pdf->SetFont('times', '', 9);
+        
+        $studentComments = $data['student_comments'] ?? [];
+        if (!empty($studentComments)) {
+            foreach ($studentComments as $comment) {
+                $pdf->MultiCell(0, 4, '- ' . ($comment['comment'] ?? ''), 0, 'L');
+            }
+        }
+        
+        $supervisorComments = $data['supervisor_comments'] ?? [];
+        if (!empty($supervisorComments)) {
+            $pdf->Ln(2);
+            $pdf->SetFont('times', 'B', 10);
+            $pdf->Cell(0, 5, 'Supervisor Comments:', 0, 1);
+            $pdf->SetFont('times', '', 9);
+            foreach ($supervisorComments as $comment) {
+                $pdf->MultiCell(0, 4, '- ' . ($comment['comment'] ?? ''), 0, 'L');
+            }
+        }
+        
+        // Signature section
+        $pdf->Ln(5);
+        $pdf->SetFont('times', 'B', 10);
+        $pdf->Cell(0, 6, 'Prepared by: ' . $data['prepared_by'], 0, 1);
+        $pdf->Cell(0, 6, 'Date: ' . $data['date'], 0, 1);
+    }
+
+    /**
+     * Generate FEDA full page (Matches your FacultyEvaluationDevelopmentAcknowledgmentPDF layout)
+     * Used by: generateFEDA() and generateAll()
+     */
+    private function generateFEDAFullPage($pdf, $data)
+    {
+        // This is a simplified version - you should copy the full FEDA layout
+        // from your FacultyEvaluationDevelopmentAcknowledgmentPDF::generateFEDAForm() method
+        $pdf->SetFont('times', 'B', 14);
+        $pdf->Cell(0, 10, 'FACULTY EVALUATION AND DEVELOPMENT ACKNOWLEDGMENT (FEDA)', 0, 1, 'C');
+        $pdf->Ln(5);
+        
+        $pdf->SetFont('times', '', 11);
+        $pdf->Cell(40, 6, 'Faculty: ' . $data['faculty_name'], 0, 1);
+        $pdf->Cell(40, 6, 'College/Department: ' . $data['college'], 0, 1);
+        $pdf->Cell(40, 6, 'Academic Rank: ' . $data['academic_rank'], 0, 1);
+        $pdf->Cell(40, 6, 'Date: ' . $data['date'], 0, 1);
+        $pdf->Ln(5);
+        
+        // Evaluation Summary
+        $pdf->SetFont('times', 'B', 11);
+        $pdf->Cell(0, 6, 'Evaluation Summary:', 0, 1);
+        $pdf->SetFont('times', '', 10);
+        $pdf->Cell(60, 5, 'Overall SET Rating:', 0);
+        $pdf->Cell(60, 5, number_format($data['overall_set_rating'] ?? 0, 2) . '%', 0, 1);
+        $pdf->Cell(60, 5, 'Overall SEF Rating:', 0);
+        $pdf->Cell(60, 5, number_format($data['overall_sef_rating'] ?? 0, 2) . '%', 0, 1);
+        
+        $pdf->Ln(5);
+        
+        // Development Plan
+        $pdf->SetFont('times', 'B', 11);
+        $pdf->Cell(0, 6, 'Development Plan:', 0, 1);
+        $pdf->SetFont('times', '', 10);
+        
+        $pdf->SetFont('times', 'B', 10);
+        $pdf->Cell(0, 5, 'Areas for Improvement:', 0, 1);
+        $pdf->SetFont('times', '', 10);
+        $pdf->MultiCell(0, 5, $data['areas_for_improvement'] ?? '');
+        
+        $pdf->Ln(2);
+        $pdf->SetFont('times', 'B', 10);
+        $pdf->Cell(0, 5, 'Proposed Activities:', 0, 1);
+        $pdf->SetFont('times', '', 10);
+        $pdf->MultiCell(0, 5, $data['proposed_activities'] ?? '');
+        
+        $pdf->Ln(2);
+        $pdf->SetFont('times', 'B', 10);
+        $pdf->Cell(0, 5, 'Action Plan:', 0, 1);
+        $pdf->SetFont('times', '', 10);
+        $pdf->MultiCell(0, 5, $data['action_plan'] ?? '');
+        
+        // Signature section
+        $pdf->Ln(5);
+        $pdf->SetFont('times', 'B', 10);
+        $pdf->Cell(0, 6, 'Program Head/Supervisor: ' . $data['program_head_name'], 0, 1);
+        $pdf->Cell(0, 6, 'Faculty Signature: _________________________', 0, 1);
+        $pdf->Cell(0, 6, 'Date: _________________________', 0, 1);
+    }
+
     /**
      * Get Program Level from enrollment_courses via programs -> program_levels
+     * Used by: generateBatch() - SET
      */
     private function getProgramLevel($courseCode, $facultyId, $term)
     {
@@ -204,6 +1165,7 @@ class BatchPDFController extends Controller
     
     /**
      * Get cached benchmark statements
+     * Used by: generateBatch() - SET
      */
     private function getBenchmarkStatements()
     {
@@ -237,6 +1199,7 @@ class BatchPDFController extends Controller
     
     /**
      * Get term details with caching
+     * Used by: generateBatch() - SET
      */
     private function getTermDetails($term)
     {
@@ -280,6 +1243,7 @@ class BatchPDFController extends Controller
     
     /**
      * Extract ratings from student data (optimized)
+     * Used by: generateBatch() - SET
      */
     private function extractRatings($student)
     {
@@ -315,6 +1279,7 @@ class BatchPDFController extends Controller
     
     /**
      * Generate a single SET form page (optimized version)
+     * Used by: generateBatch() - SET
      */
     private function generateSETFormPageOptimized($pdf, $data, $x_offset, $y_offset, $termDetails, $statements)
     {
@@ -732,7 +1697,6 @@ class BatchPDFController extends Controller
         $pdf->Cell($label_width, $sig_row_height, 'Name of Evaluator/ID number', 0, 0, 'L');
         $pdf->SetFont('times', '', $body_font_size);
         $pdf->Cell(3, $sig_row_height, ':', 0, 0, 'R');
-        // $pdf->Cell($line_width - 3, $sig_row_height, ' ' . $data['evaluator_name'] . ' / ' . $data['evaluator_id'], 'B', 1);
         $pdf->Cell($line_width - 3, $sig_row_height, '', 'B', 1);
         
         // Date
@@ -748,6 +1712,7 @@ class BatchPDFController extends Controller
     
     /**
      * Register Times New Roman fonts
+     * Used by: All generate methods
      */
     private function registerFonts()
     {
@@ -771,6 +1736,7 @@ class BatchPDFController extends Controller
     
     /**
      * Add watermark to PDF page (optimized with static cache)
+     * Used by: All generate methods
      */
     private function addWatermark($pdf)
     {
@@ -809,6 +1775,7 @@ class BatchPDFController extends Controller
     
     /**
      * Display PDF file
+     * Used by: All generate methods to display the PDF
      */
     public function display($filename)
     {

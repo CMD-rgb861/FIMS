@@ -18,26 +18,38 @@ class SubjectsController extends Controller
         $currentUser = $request->user();
         $facultyEvaluations = $this->getFacultyEvaluations();
         
-        // Get available terms from the school_years table (all terms, not just active)
+        // Get available terms from the school_years table with the same filter as EvaluationController
         $availableTerms = DB::connection('lnu_poes')
             ->table('school_years')
+            ->select(
+                'id as value',
+                DB::raw("
+                    CONCAT(
+                        school_year_from,
+                        '-',
+                        school_year_to,
+                        ' - ',
+                        CASE
+                            WHEN semester = 1 THEN '1st Semester'
+                            WHEN semester = 2 THEN '2nd Semester'
+                            WHEN semester = 3 THEN 'Summer'
+                            ELSE CONCAT('Semester ', semester)
+                        END
+                    ) as label
+                ")
+            )
+            ->where(function($query) {
+                $query->where('school_year_from', '>', 2025)
+                    ->orWhere(function($q) {
+                        $q->where('school_year_from', '=', 2025)
+                            ->where('school_year_to', '=', 2026)
+                            ->where('semester', '>=', 2);
+                    });
+            })
+            ->orderByDesc('school_year_to')
             ->orderByDesc('school_year_from')
             ->orderByDesc('semester')
             ->get()
-            ->map(function ($term) {
-                $semesterText = '';
-                switch ($term->semester) {
-                    case 1: $semesterText = '1st Semester'; break;
-                    case 2: $semesterText = '2nd Semester'; break;
-                    case 3: $semesterText = 'Summer'; break;
-                    default: $semesterText = "Semester {$term->semester}";
-                }
-                
-                return [
-                    'id' => $term->id,
-                    'label' => "S.Y. {$term->school_year_from}-{$term->school_year_to} - {$semesterText}",
-                ];
-            })
             ->toArray();
         
         // Handle term parameter - expecting ID

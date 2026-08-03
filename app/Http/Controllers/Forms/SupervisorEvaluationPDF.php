@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use App\Models\FacultyDevelopmentForm;
 use App\Models\SupervisorEvaluationSubmission;
 use App\Models\User;
 use TCPDF;
@@ -77,8 +78,8 @@ class SupervisorEvaluationPDF extends Controller
         
         // Combine college and department (if both exist)
         $collegeDepartment = collect([
-            $collegeName,
-            $departmentName
+            $departmentName,
+            $collegeName
         ])->filter()->implode(' / ');
         
         // If still empty, fallback to what was provided from frontend
@@ -142,9 +143,10 @@ class SupervisorEvaluationPDF extends Controller
      * Batch fetch SEF data for multiple faculty
      * POST /sef/batch-reports
      */
+    //Checks for Overall SEF and SET ratings for each faculty for IFE Form
     public function batchReports(Request $request)
     {
-        set_time_limit(120); // 2 minutes should be enough
+        set_time_limit(120);
         
         $validated = $request->validate([
             'term_id' => 'required',
@@ -157,7 +159,7 @@ class SupervisorEvaluationPDF extends Controller
         
         $results = [];
         
-        // Fetch all submissions for all faculty in ONE query with answers
+        // Fetch all SEF submissions
         $allSubmissions = SupervisorEvaluationSubmission::query()
             ->whereIn('instructor_id_no', $facultyIds)
             ->where('term_id', $termId)
@@ -168,26 +170,72 @@ class SupervisorEvaluationPDF extends Controller
             ->get()
             ->groupBy('instructor_id_no');
         
+        // Fetch SET data for all faculty in one query
+        $setData = DB::connection('lnu_poes')
+            ->table('enrollment_courses as ec')
+            ->join('student_evaluation_submissions as ses', 'ec.id', '=', 'ses.subject_id')
+            ->select(
+                'ec.id_no',
+                DB::raw('COUNT(DISTINCT ses.student_id_number) as student_count'),
+                DB::raw('AVG(ses.rating_percentage) as avg_rating')
+            )
+            ->whereIn('ec.id_no', $facultyIds)
+            ->where('ec.school_year_id', $termId)
+            ->whereNotNull('ses.rating_percentage')
+            ->groupBy('ec.id_no')
+            ->get()
+            ->keyBy('id_no');
+        
+        // Fetch FEDA data for all faculty
+        $fedaData = FacultyDevelopmentForm::whereIn('id_no', $facultyIds)
+            ->where('term_id', $termId)
+            ->get()
+            ->keyBy('id_no');
+        
         foreach ($facultyIds as $facultyId) {
             $submissions = $allSubmissions->get($facultyId, collect());
             $respondentCount = $submissions->count();
             
-            if ($respondentCount === 0) {
+            $hasSefData = $respondentCount > 0;
+            $hasSetData = $setData->has($facultyId);
+            $hasFedaData = $fedaData->has($facultyId);
+            
+            // Get FEDA submission status
+            $fedaSubmitted = false;
+            $fedaForm = null;
+            if ($hasFedaData) {
+                $fedaForm = $fedaData->get($facultyId);
+                $fedaSubmitted = $fedaForm && $fedaForm->submitted_at !== null;
+            }
+            
+            // Calculate SET rating if available
+            $overallSetRating = null;
+            if ($hasSetData) {
+                $setRow = $setData->get($facultyId);
+                $overallSetRating = round($setRow->avg_rating ?? 0, 2);
+            }
+            
+            if (!$hasSefData) {
                 $results[$facultyId] = [
                     'has_data' => false,
+                    'has_sef_data' => false,
+                    'has_set_data' => $hasSetData,
+                    'has_feda_data' => $hasFedaData,
+                    'feda_submitted' => $fedaSubmitted,
+                    'overall_set_rating' => $overallSetRating,
                     'overall_sef_rating' => null,
                     'total_evaluators' => 0,
+                    'has_complete_data' => false,
                     'details' => null
                 ];
                 continue;
             }
             
-            // Calculate average rating percentage across all submissions
+            // Calculate SEF ratings (existing logic)
             $totalPercentage = 0;
             foreach ($submissions as $submission) {
                 $totalPercentage += $submission->rating_percentage ?? 0;
             }
-            
             $overallPercentage = round($totalPercentage / $respondentCount, 2);
             
             // Calculate individual ratings for the 15 benchmarks
@@ -196,7 +244,6 @@ class SupervisorEvaluationPDF extends Controller
             
             foreach ($submissions as $submission) {
                 foreach ($submission->answers as $answer) {
-                    // Extract question number from keys like 'q1', 'q2', 'Benchmark 1', etc.
                     $questionNum = $this->extractQuestionNumber($answer->question_key);
                     if ($questionNum >= 1 && $questionNum <= 15) {
                         $index = $questionNum - 1;
@@ -206,30 +253,33 @@ class SupervisorEvaluationPDF extends Controller
                 }
             }
             
-            // Average the ratings
             for ($i = 0; $i < 15; $i++) {
                 if ($ratingCounts[$i] > 0) {
                     $ratings[$i] = round($ratings[$i] / $ratingCounts[$i], 2);
                 } else {
-                    $ratings[$i] = null; // No data for this benchmark
+                    $ratings[$i] = null;
                 }
             }
             
-            // Calculate total score and rating percentage from ratings
             $totalScore = array_sum(array_filter($ratings));
-            $maxPossibleScore = 15 * 5; // 15 questions * max 5 points = 75
+            $maxPossibleScore = 15 * 5;
             $calculatedPercentage = $maxPossibleScore > 0 ? round(($totalScore / $maxPossibleScore) * 100, 2) : 0;
             
-
             $comments = $submissions
-            ->pluck('comments')
-            ->filter()
-            ->implode("\n");
+                ->pluck('comments')
+                ->filter()
+                ->implode("\n");
 
             $results[$facultyId] = [
                 'has_data' => true,
+                'has_sef_data' => true,
+                'has_set_data' => $hasSetData,
+                'has_feda_data' => $hasFedaData,
+                'feda_submitted' => $fedaSubmitted,
+                'overall_set_rating' => $overallSetRating,
                 'overall_sef_rating' => $overallPercentage ?: $calculatedPercentage,
                 'total_evaluators' => $respondentCount,
+                'has_complete_data' => $hasSefData && $hasSetData && $fedaSubmitted,
                 'overall_average' => $overallPercentage ? round($overallPercentage / 20, 2) : round($calculatedPercentage / 20, 2),
                 'ratings_breakdown' => $ratings,
                 'comments' => $comments,
@@ -360,7 +410,7 @@ class SupervisorEvaluationPDF extends Controller
     /**
      * Get benchmark statements for SEF
      */
-    private function getBenchmarkStatements()
+    public function getBenchmarkStatements()
     {
         return [
             'Benchmark Statements for Faculty Teaching Effectiveness',
@@ -476,7 +526,7 @@ class SupervisorEvaluationPDF extends Controller
     /**
      * Get term details
      */
-    private function getTermDetails($termId)
+    public function getTermDetails($termId)
     {
         $semesterDisplay = '';
         $academicYearDisplay = '';
@@ -519,7 +569,7 @@ class SupervisorEvaluationPDF extends Controller
     /**
      * Generate the SEF form (Supervisor's Evaluation of Faculty)
      */
-    private function generateSEFForm($pdf, $data, $x_offset, $y_offset, $termDetails, $statements)
+    public function generateSEFForm($pdf, $data, $x_offset, $y_offset, $termDetails, $statements)
     {
         $body_font_size = 10;
         $title_font_size = 10;
@@ -934,7 +984,7 @@ class SupervisorEvaluationPDF extends Controller
     /**
      * Register Times New Roman fonts
      */
-    private function registerFonts()
+    public function registerFonts()
     {
         static $fontsRegistered = false;
         
@@ -957,7 +1007,7 @@ class SupervisorEvaluationPDF extends Controller
     /**
      * Add watermark to PDF page
      */
-    private function addWatermark($pdf)
+    public function addWatermark($pdf)
     {
         static $watermark_path = null;
         static $page_width = null;
