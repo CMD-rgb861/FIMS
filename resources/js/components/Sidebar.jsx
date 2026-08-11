@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React from 'react';
+import { Link } from '@inertiajs/react';
 import { getRoleLabel, normalizeRole } from '../utils/role';
 
 export default function Sidebar({
@@ -24,9 +25,10 @@ export default function Sidebar({
     const profilePhotoUrl = resolvedUser?.profile_photo_url ?? '';
     const role = normalizeRole(resolvedUser?.role);
     const roleLabel = getRoleLabel(role);
+
     const resolvedCanAccessEvaluation =
-    (resolvedUser?.canEvaluateFaculty ?? false) &&
-    role !== 'dean';
+        (resolvedUser?.canEvaluateFaculty ?? false) &&
+        role !== 'dean';
 
     const navClass = (key) => (
         activePage === key
@@ -42,82 +44,161 @@ export default function Sidebar({
 
     return (
         <aside className="hidden md:sticky md:top-0 md:flex h-screen w-72 bg-white border-r border-slate-200 flex-col">
+
+            {/* Header */}
             <div className="h-16 px-6 flex items-center gap-3 border-b border-slate-200">
                 <img
                     src="/image/LNULogo.png"
                     alt="LNU Logo"
                     className="h-9 w-9 rounded-lg object-contain"
                 />
+
                 <div className="leading-tight">
                     <div className="font-semibold">{appLabel}</div>
                     <div className="text-xs text-slate-500">LNU</div>
                 </div>
             </div>
 
+            {/* Navigation */}
             <nav className="flex-1 p-3 space-y-1">
-                <a href={dashboardUrl} className={navClass('dashboard')}>
+
+                {/* Dashboard */}
+                <Link
+                    href={dashboardUrl}
+                    className={navClass('dashboard')}
+                >
                     <span className={iconClass('dashboard')}>
-                        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                        <svg
+                            viewBox="0 0 24 24"
+                            className="h-4 w-4"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                        >
                             <path d="M3 10.5 12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1v-10.5Z" />
                         </svg>
                     </span>
-                    <span className="text-sm font-medium">Dashboard</span>
-                </a>
 
-                <a href={subjectsUrl} className={navClass('subjects')}>
+                    <span className="text-sm font-medium">
+                        Dashboard
+                    </span>
+                </Link>
+
+                {/* Subjects */}
+                <Link
+                    href={subjectsUrl}
+                    className={navClass('subjects')}
+                >
                     <span className={iconClass('subjects')}>
-                        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                        <svg
+                            viewBox="0 0 24 24"
+                            className="h-4 w-4"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                        >
                             <path d="M4 5h16" />
                             <path d="M4 12h16" />
                             <path d="M4 19h16" />
                         </svg>
                     </span>
-                    <span className="text-sm font-medium">Subjects</span>
-                </a>
 
+                    <span className="text-sm font-medium">
+                        Subjects
+                    </span>
+                </Link>
+
+                {/* Faculty Evaluation */}
                 {resolvedCanAccessEvaluation ? (
-                    <a href={evaluationUrl} className={navClass('evaluation')}>
+                    <Link
+                        href={evaluationUrl}
+                        className={navClass('evaluation')}
+                    >
                         <span className={iconClass('evaluation')}>
-                            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                            <svg
+                                viewBox="0 0 24 24"
+                                className="h-4 w-4"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                            >
                                 <path d="M4 4h16v14H4z" />
                                 <path d="M8 22h8" />
                                 <path d="M12 18v4" />
                             </svg>
                         </span>
-                        <span className="text-sm font-medium">Faculty Evaluation</span>
+
+                        <span className="text-sm font-medium">
+                            Faculty Evaluation
+                        </span>
+
                         {hasPendingEvaluations ? (
-                            <span className="inline-flex h-2.5 w-2.5 rounded-full bg-red-500 ml-auto" aria-label="Pending evaluations" title="Pending evaluations" />
+                            <span
+                                className="inline-flex h-2.5 w-2.5 rounded-full bg-red-500 ml-auto"
+                                aria-label="Pending evaluations"
+                                title="Pending evaluations"
+                            />
                         ) : null}
-                    </a>
+                    </Link>
                 ) : null}
 
-                <a href={reportsUrl} className={navClass('reports')}>
+                {/* Evaluation Reports */}
+                <Link
+                    href={reportsUrl}
+                    className={navClass('reports')}
+                >
                     <span className={iconClass('reports')}>
-                        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                        <svg
+                            viewBox="0 0 24 24"
+                            className="h-4 w-4"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                        >
                             <path d="M4 19h16" />
                             <path d="M7 16V8" />
                             <path d="M12 16V5" />
                             <path d="M17 16v-4" />
                         </svg>
                     </span>
-                    <span className="text-sm font-medium">Evaluation Reports</span>
-                </a>
+
+                    <span className="text-sm font-medium">
+                        Evaluation Reports
+                    </span>
+                </Link>
 
                 <div className="my-2 border-t border-slate-200" />
 
-                <a href={accountSettingsUrl} className={navClass('account-settings')}>
-                    <span className={iconClass('account-settings')}>
-                        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                            <circle cx="12" cy="12" r="3" />
-                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                        </svg>
-                    </span>
-                    <span className="text-sm font-medium">Account Settings</span>
-                </a>
+                {/* Account Settings */}
+                {accountSettingsUrl && accountSettingsUrl !== '#' ? (
+                    <Link
+                        href={accountSettingsUrl}
+                        className={navClass('account-settings')}
+                    >
+                        <span className={iconClass('account-settings')}>
+                            <svg
+                                viewBox="0 0 24 24"
+                                className="h-4 w-4"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                            >
+                                <circle cx="12" cy="12" r="3" />
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                            </svg>
+                        </span>
+
+                        <span className="text-sm font-medium">
+                            Account Settings
+                        </span>
+                    </Link>
+                ) : null}
             </nav>
 
+            {/* User / Logout */}
             <div className="p-4 border-t border-slate-200">
                 <div className="flex items-center gap-3">
+
                     {profilePhotoUrl ? (
                         <img
                             src={profilePhotoUrl}
@@ -129,15 +210,33 @@ export default function Sidebar({
                             {initial}
                         </div>
                     )}
+
                     <div className="min-w-0">
-                        <div className="text-sm font-semibold truncate">{fullName}</div>
-                        <div className="text-xs text-slate-500 truncate">{resolvedUser?.id_no ?? 'N/A'}</div>
+                        <div className="text-sm font-semibold truncate">
+                            {fullName}
+                        </div>
+
+                        <div className="text-xs text-slate-500 truncate">
+                            {resolvedUser?.id_no ?? 'N/A'}
+                        </div>
+
                         <div className="mt-1 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
                             {roleLabel}
                         </div>
                     </div>
-                    <form method="POST" action={logoutUrl} className="ml-auto">
-                        <input type="hidden" name="_token" value={csrfToken} />
+
+                    {/* Logout remains a normal POST form */}
+                    <form
+                        method="POST"
+                        action={logoutUrl}
+                        className="ml-auto"
+                    >
+                        <input
+                            type="hidden"
+                            name="_token"
+                            value={csrfToken}
+                        />
+
                         <button
                             type="submit"
                             className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
@@ -145,6 +244,7 @@ export default function Sidebar({
                             Logout
                         </button>
                     </form>
+
                 </div>
             </div>
         </aside>
