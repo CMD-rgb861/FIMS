@@ -1768,8 +1768,8 @@ class IndividualFacultyEvaluationPDF extends Controller
         $label_width = $pdf->GetStringWidth($label);
         $pdf->Cell($label_width, $sig_row_height, $label, 0, 0, 'L');
         $pdf->SetFont('times', '', $body_font_size);
-        $pdf->Cell($fixed_line_width, $sig_row_height, ' ' . $data['date'], 'B', 1);
-
+        //$pdf->Cell($fixed_line_width, $sig_row_height, ' ' . $data['date'], 'B', 1);
+        $pdf->Cell($fixed_line_width, $sig_row_height, ' ', 'B', 1);
         $pdf->Ln(2);
 
         // Reviewed by Section
@@ -1811,8 +1811,8 @@ class IndividualFacultyEvaluationPDF extends Controller
         $label_width = $pdf->GetStringWidth($label);
         $pdf->Cell($label_width, $sig_row_height, $label, 0, 0, 'L');
         $pdf->SetFont('times', '', $body_font_size);
-        $pdf->Cell($fixed_line_width, $sig_row_height, ' ' . $data['date'], 'B', 1);
-
+        //$pdf->Cell($fixed_line_width, $sig_row_height, ' ' . $data['date'], 'B', 1);
+        $pdf->Cell($fixed_line_width, $sig_row_height, ' ', 'B', 1);
         $pdf->Ln(2);
 
         // Concurred by Section
@@ -1854,8 +1854,8 @@ class IndividualFacultyEvaluationPDF extends Controller
         $label_width = $pdf->GetStringWidth($label);
         $pdf->Cell($label_width, $sig_row_height, $label, 0, 0, 'L');
         $pdf->SetFont('times', '', $body_font_size);
-        $pdf->Cell($fixed_line_width, $sig_row_height, ' ' . $data['date'], 'B', 1);
-
+        //$pdf->Cell($fixed_line_width, $sig_row_height, ' ' . $data['date'], 'B', 1);
+        $pdf->Cell($fixed_line_width, $sig_row_height, ' ', 'B', 1);
         $pdf->Ln(2);
     }
     

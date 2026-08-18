@@ -93,4 +93,14 @@ class SsoController extends Controller
 
         return redirect()->intended(route('dashboard'));
     }
+
+    public function destroy(Request $request) { // Logout from Laravel 
+        Auth::guard('web')->logout(); // Destroy the Laravel session 
+        
+        $request->session()->invalidate(); // Generate a new CSRF token 
+        $request->session()->regenerateToken(); // Redirect back to the central SSO 
+        $ip = getHostByName(getHostName()); 
+
+        return redirect()->away( "https://{$ip}/ids/fims/home/n" ); 
+    }
 }

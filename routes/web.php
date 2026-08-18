@@ -23,6 +23,7 @@ use App\Http\Controllers\Auth\SsoController;
 use App\Http\Controllers\Forms\IndividualFacultyEvaluationPDF;
 use App\Http\Controllers\Forms\FacultyEvaluationDevelopmentAcknowledgmentPDF;
 use App\Http\Controllers\IFEController;  // ✅ Add this import
+use App\Http\Controllers\SearchController;
 
 Route::get('/sso/validate', [SsoController::class, 'validateToken'])
     ->name('sso.validate');
@@ -109,8 +110,10 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/reports/print-all/generate', [BatchPDFController::class, 'generateAll'])->name('reports.print-all.generate');
 
     // ===== SEARCH ROUTES =====
-    Route::post('/search/faculty', [App\Http\Controllers\SearchController::class, 'searchFaculty'])->name('search.faculty');
-    Route::post('/search/subjects', [App\Http\Controllers\SearchController::class, 'searchSubjects'])->name('search.subjects');
+    Route::post('/search/faculty', [SearchController::class, 'searchFaculty'])->name('search.faculty');
+    Route::post('/search/subjects', [SearchController::class, 'searchSubjects'])->name('search.subjects');
+
+    Route::post('logout', [SsoController::class, 'destroy'])->name('logout');
 });
 
 Route::middleware('auth')->group(function () {
@@ -119,4 +122,3 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');  
 });
 
-require __DIR__.'/auth.php';
