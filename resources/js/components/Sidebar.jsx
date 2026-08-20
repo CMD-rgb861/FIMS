@@ -104,7 +104,7 @@ export default function Sidebar({
                     </span>
 
                     <span className="text-sm font-medium">
-                        Subjects
+                        Courses
                     </span>
                 </Link>
 
