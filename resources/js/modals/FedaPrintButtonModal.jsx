@@ -4,10 +4,6 @@ import { toast } from 'react-toastify';
 
 // Memoized row component to prevent re-renders
 const FacultyRow = React.memo(({ faculty, isSelected, onToggle, isLoadingDetails }) => {
-    // Faculty must have complete SET/SEF data AND FEDA must be submitted
-    // Backend now includes feda_submitted in has_complete_data
-    const isSelectable = faculty.has_complete_data === true;
-    
     return (
         <tr className="hover:bg-slate-50">
             <td className="px-4 py-3">
@@ -15,7 +11,7 @@ const FacultyRow = React.memo(({ faculty, isSelected, onToggle, isLoadingDetails
                     type="checkbox"
                     checked={isSelected}
                     onChange={() => onToggle(faculty.employee_id_no)}
-                    disabled={isLoadingDetails || !isSelectable}
+                    disabled={isLoadingDetails} // REMOVED the restriction here
                     className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
                 />
             </td>
@@ -66,6 +62,7 @@ export default function FedaPrintButtonModal({
 }) {
     const [selectedFaculty, setSelectedFaculty] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
+    const [filterStatus, setFilterStatus] = useState('all'); // Added filter state
     const [isSearching, setIsSearching] = useState(false);
     const [searchResults, setSearchResults] = useState([]);
     const effectiveFacultyList = useMemo(
@@ -239,6 +236,7 @@ export default function FedaPrintButtonModal({
             setIsGenerating(false);
             setCurrentPage(1);
             setSearchQuery('');
+            setFilterStatus('all'); // Reset filter
             setSearchResults([]);
             if (searchTimeoutRef.current) {
                 clearTimeout(searchTimeoutRef.current);
@@ -255,6 +253,15 @@ export default function FedaPrintButtonModal({
         };
     }, []);
 
+    // Filter faculty based on Dropdown Status and Search Results
+    const filteredFaculty = useMemo(() => {
+        return searchResults.filter(faculty => {
+            if (filterStatus === 'submitted') return faculty.feda_submitted === true;
+            if (filterStatus === 'not_submitted') return faculty.feda_submitted !== true;
+            return true; // 'all'
+        });
+    }, [searchResults, filterStatus]);
+
     const handleFacultyToggle = useCallback((facultyId) => {
         setSelectedFaculty(prev => 
             prev.includes(facultyId)
@@ -264,17 +271,12 @@ export default function FedaPrintButtonModal({
     }, []);
 
     const handleSelectAll = useCallback(() => {
-        // Only select faculty that have complete data (SET + SEF + FEDA submitted)
-        // Backend now includes feda_submitted in has_complete_data
-        const facultyWithCompleteData = searchResults.filter(f => 
-            f.has_complete_data === true
-        );
         setSelectedFaculty(prev => 
-            prev.length === facultyWithCompleteData.length 
+            prev.length === filteredFaculty.length && filteredFaculty.length > 0
                 ? [] 
-                : facultyWithCompleteData.map(f => f.employee_id_no)
+                : filteredFaculty.map(f => f.employee_id_no)
         );
-    }, [searchResults]);
+    }, [filteredFaculty]);
 
     const handleGeneratePDF = useCallback(async () => {
         if (selectedFaculty.length === 0) {
@@ -355,21 +357,14 @@ export default function FedaPrintButtonModal({
         }
     }, [selectedFaculty, facultyWithSef, selectedSchoolYear, schoolYearLabel, onClose]);
 
-    // Memoized computed values - only faculty with complete data (SET + SEF + FEDA submitted)
-    // Backend now includes feda_submitted in has_complete_data
-    const facultyWithData = useMemo(() => 
-        searchResults.filter(f => f.has_complete_data === true), 
-        [searchResults]
-    );
-        
     const selectedCount = selectedFaculty.length;
-    const totalWithData = facultyWithData.length;
+    const totalFiltered = filteredFaculty.length;
     
     // Pagination
-    const totalPages = Math.ceil(searchResults.length / itemsPerPage);
+    const totalPages = Math.max(1, Math.ceil(filteredFaculty.length / itemsPerPage));
     const indexOfLastItem = currentPage * itemsPerPage;
     const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-    const currentFaculty = searchResults.slice(indexOfFirstItem, indexOfLastItem);
+    const currentFaculty = filteredFaculty.slice(indexOfFirstItem, indexOfLastItem);
     
     const handlePageChange = useCallback((pageNumber) => {
         setCurrentPage(pageNumber);
@@ -429,10 +424,10 @@ export default function FedaPrintButtonModal({
                         </div>
                     )}
 
-                    {/* Search Bar */}
+                    {/* Search and Filter Bar */}
                     {!isLoadingDetails && facultyWithSef.length > 0 && (
-                        <div className="mb-4">
-                            <div className="relative">
+                        <div className="mb-4 flex flex-col sm:flex-row gap-3">
+                            <div className="relative flex-1">
                                 <input
                                     type="text"
                                     placeholder="Search faculty by name or ID..."
@@ -452,25 +447,36 @@ export default function FedaPrintButtonModal({
                                     </div>
                                 )}
                             </div>
-                            {searchQuery && (
-                                <div className="mt-1 text-xs text-slate-500">
-                                    Found {searchResults.length} result(s)
-                                </div>
-                            )}
+
+                            {/* Status Filter Dropdown */}
+                            <div className="w-full sm:w-56">
+                                <select
+                                    value={filterStatus}
+                                    onChange={(e) => {
+                                        setFilterStatus(e.target.value);
+                                        setCurrentPage(1);
+                                    }}
+                                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                                >
+                                    <option value="all">All Faculty</option>
+                                    <option value="submitted">FEDA Submitted</option>
+                                    <option value="not_submitted">FEDA Not Submitted</option>
+                                </select>
+                            </div>
                         </div>
                     )}
 
                     {/* Select All Button */}
-                    {!isLoadingDetails && facultyWithData.length > 0 && (
+                    {!isLoadingDetails && filteredFaculty.length > 0 && (
                         <div className="mb-4 flex items-center justify-between">
                             <button
                                 onClick={handleSelectAll}
                                 className="text-sm text-blue-600 hover:text-blue-700 font-medium"
                             >
-                                {selectedCount === totalWithData ? 'Deselect All' : 'Select All'}
+                                {selectedCount === totalFiltered && totalFiltered > 0 ? 'Deselect All' : 'Select All'}
                             </button>
                             <span className="text-xs text-slate-500">
-                                {selectedCount} of {totalWithData} selected
+                                {selectedCount} of {totalFiltered} selected
                             </span>
                         </div>
                     )}
@@ -480,9 +486,9 @@ export default function FedaPrintButtonModal({
                         id="faculty-table-container"
                         className="border border-slate-200 rounded-lg overflow-hidden"
                     >
-                        {searchResults.length === 0 ? (
+                        {filteredFaculty.length === 0 ? (
                             <div className="p-8 text-center text-slate-500">
-                                {searchQuery ? 'No faculty members match your search.' : 'No faculty members available.'}
+                                {searchQuery || filterStatus !== 'all' ? 'No faculty members match your filters.' : 'No faculty members available.'}
                             </div>
                         ) : (
                             <>
@@ -493,7 +499,7 @@ export default function FedaPrintButtonModal({
                                                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 w-12">
                                                     <input
                                                         type="checkbox"
-                                                        checked={selectedCount === totalWithData && totalWithData > 0}
+                                                        checked={selectedCount === totalFiltered && totalFiltered > 0}
                                                         onChange={handleSelectAll}
                                                         disabled={isLoadingDetails}
                                                         className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
@@ -524,7 +530,7 @@ export default function FedaPrintButtonModal({
                                 {totalPages > 1 && (
                                     <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3">
                                         <div className="text-sm text-slate-700">
-                                            Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, searchResults.length)} of {searchResults.length} faculty
+                                            Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredFaculty.length)} of {filteredFaculty.length} faculty
                                         </div>
                                         <div className="flex gap-2">
                                             <button
@@ -586,26 +592,6 @@ export default function FedaPrintButtonModal({
                             </>
                         )}
                     </div>
-                    
-                    {/* Warning if no faculty have complete data */}
-                    {!isLoadingDetails && searchResults.length > 0 && totalWithData === 0 && (
-                        <div className="mt-4 rounded-md bg-yellow-50 p-3 text-sm text-yellow-700 border border-yellow-200">
-                            No faculty members have complete SET and SEF data with FEDA submitted for the selected school year. 
-                            Both SET and SEF data are required and FEDA must be submitted to generate FEDA reports.
-                        </div>
-                    )}
-                    
-                    {/* Show counts of incomplete data */}
-                    {!isLoadingDetails && searchResults.length > 0 && totalWithData > 0 && totalWithData < searchResults.length && (
-                        <div className="mt-4 rounded-md bg-blue-50 p-3 text-sm text-blue-700 border border-blue-200">
-                            {searchResults.length - totalWithData} faculty member(s) are not selectable because they are missing 
-                            {searchResults.some(f => !f.has_set_data) ? ' SET' : ''}
-                            {searchResults.some(f => !f.has_set_data) && searchResults.some(f => !f.has_sef_data) ? ' and/or' : ''}
-                            {searchResults.some(f => !f.has_sef_data) ? ' SEF' : ''} 
-                            {searchResults.some(f => !f.has_sef_data) && searchResults.some(f => !f.feda_submitted) ? ' and/or' : ''}
-                            {searchResults.some(f => !f.feda_submitted) ? ' FEDA submission' : ''} data.
-                        </div>
-                    )}
                 </div>
 
                 {/* Footer */}

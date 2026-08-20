@@ -10,7 +10,7 @@ const FacultyRow = React.memo(({ faculty, isSelected, onToggle, isLoadingDetails
                 type="checkbox"
                 checked={isSelected}
                 onChange={() => onToggle(faculty.employee_id_no)}
-                disabled={isLoadingDetails || !faculty.has_sef_data}
+                disabled={isLoadingDetails} // REMOVED the restriction here
                 className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
             />
         </td>
@@ -42,6 +42,7 @@ export default function SefPrintButtonModal({
 }) {
     const [selectedFaculty, setSelectedFaculty] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
+    const [filterStatus, setFilterStatus] = useState('all'); // Added filter state
     const [isSearching, setIsSearching] = useState(false);
     const [searchResults, setSearchResults] = useState([]);
     const effectiveFacultyList = useMemo(
@@ -204,6 +205,7 @@ export default function SefPrintButtonModal({
             setIsGenerating(false);
             setCurrentPage(1);
             setSearchQuery('');
+            setFilterStatus('all'); // Reset filter
             setSearchResults([]);
             if (searchTimeoutRef.current) {
                 clearTimeout(searchTimeoutRef.current);
@@ -220,6 +222,16 @@ export default function SefPrintButtonModal({
         };
     }, []);
 
+    // Filter faculty based on Dropdown Status and Search Results
+    const filteredFaculty = useMemo(() => {
+        return searchResults.filter(faculty => {
+            const hasSef = faculty.has_sef_data === true || faculty.overall_sef_rating !== null;
+            if (filterStatus === 'with_sef') return hasSef;
+            if (filterStatus === 'without_sef') return !hasSef;
+            return true; // 'all'
+        });
+    }, [searchResults, filterStatus]);
+
     const handleFacultyToggle = useCallback((facultyId) => {
         setSelectedFaculty(prev => 
             prev.includes(facultyId)
@@ -229,13 +241,12 @@ export default function SefPrintButtonModal({
     }, []);
 
     const handleSelectAll = useCallback(() => {
-        const facultyWithData = searchResults.filter(f => f.has_sef_data);
         setSelectedFaculty(prev => 
-            prev.length === facultyWithData.length 
+            prev.length === filteredFaculty.length && filteredFaculty.length > 0
                 ? [] 
-                : facultyWithData.map(f => f.employee_id_no)
+                : filteredFaculty.map(f => f.employee_id_no)
         );
-    }, [searchResults]);
+    }, [filteredFaculty]);
 
     const handleGeneratePDF = useCallback(async () => {
         if (selectedFaculty.length === 0) {
@@ -311,20 +322,14 @@ export default function SefPrintButtonModal({
         }
     }, [selectedFaculty, facultyWithSef, selectedSchoolYear, schoolYearLabel, onClose]);
 
-    // Memoized computed values
-    const facultyWithData = useMemo(() => 
-        searchResults.filter(f => f.has_sef_data), 
-        [searchResults]
-    );
-    
     const selectedCount = selectedFaculty.length;
-    const totalWithData = facultyWithData.length;
+    const totalFiltered = filteredFaculty.length;
     
     // Pagination
-    const totalPages = Math.ceil(searchResults.length / itemsPerPage);
+    const totalPages = Math.max(1, Math.ceil(filteredFaculty.length / itemsPerPage));
     const indexOfLastItem = currentPage * itemsPerPage;
     const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-    const currentFaculty = searchResults.slice(indexOfFirstItem, indexOfLastItem);
+    const currentFaculty = filteredFaculty.slice(indexOfFirstItem, indexOfLastItem);
     
     const handlePageChange = useCallback((pageNumber) => {
         setCurrentPage(pageNumber);
@@ -384,10 +389,10 @@ export default function SefPrintButtonModal({
                         </div>
                     )}
 
-                    {/* Search Bar */}
+                    {/* Search and Filter Bar */}
                     {!isLoadingDetails && facultyWithSef.length > 0 && (
-                        <div className="mb-4">
-                            <div className="relative">
+                        <div className="mb-4 flex flex-col sm:flex-row gap-3">
+                            <div className="relative flex-1">
                                 <input
                                     type="text"
                                     placeholder="Search faculty by name or ID..."
@@ -407,25 +412,36 @@ export default function SefPrintButtonModal({
                                     </div>
                                 )}
                             </div>
-                            {searchQuery && (
-                                <div className="mt-1 text-xs text-slate-500">
-                                    Found {searchResults.length} result(s)
-                                </div>
-                            )}
+
+                            {/* Status Filter Dropdown */}
+                            <div className="w-full sm:w-56">
+                                <select
+                                    value={filterStatus}
+                                    onChange={(e) => {
+                                        setFilterStatus(e.target.value);
+                                        setCurrentPage(1);
+                                    }}
+                                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                                >
+                                    <option value="all">All Faculty</option>
+                                    <option value="with_sef">With SEF Rating</option>
+                                    <option value="without_sef">Without SEF Rating</option>
+                                </select>
+                            </div>
                         </div>
                     )}
 
                     {/* Select All Button */}
-                    {!isLoadingDetails && facultyWithData.length > 0 && (
+                    {!isLoadingDetails && filteredFaculty.length > 0 && (
                         <div className="mb-4 flex items-center justify-between">
                             <button
                                 onClick={handleSelectAll}
                                 className="text-sm text-blue-600 hover:text-blue-700 font-medium"
                             >
-                                {selectedCount === totalWithData ? 'Deselect All' : 'Select All'}
+                                {selectedCount === totalFiltered && totalFiltered > 0 ? 'Deselect All' : 'Select All'}
                             </button>
                             <span className="text-xs text-slate-500">
-                                {selectedCount} of {totalWithData} selected
+                                {selectedCount} of {totalFiltered} selected
                             </span>
                         </div>
                     )}
@@ -435,9 +451,9 @@ export default function SefPrintButtonModal({
                         id="faculty-table-container"
                         className="border border-slate-200 rounded-lg overflow-hidden"
                     >
-                        {searchResults.length === 0 ? (
+                        {filteredFaculty.length === 0 ? (
                             <div className="p-8 text-center text-slate-500">
-                                {searchQuery ? 'No faculty members match your search.' : 'No faculty members available.'}
+                                {searchQuery || filterStatus !== 'all' ? 'No faculty members match your filters.' : 'No faculty members available.'}
                             </div>
                         ) : (
                             <>
@@ -448,7 +464,7 @@ export default function SefPrintButtonModal({
                                                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 w-12">
                                                     <input
                                                         type="checkbox"
-                                                        checked={selectedCount === totalWithData && totalWithData > 0}
+                                                        checked={selectedCount === totalFiltered && totalFiltered > 0}
                                                         onChange={handleSelectAll}
                                                         disabled={isLoadingDetails}
                                                         className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
@@ -477,7 +493,7 @@ export default function SefPrintButtonModal({
                                 {totalPages > 1 && (
                                     <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3">
                                         <div className="text-sm text-slate-700">
-                                            Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, searchResults.length)} of {searchResults.length} faculty
+                                            Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredFaculty.length)} of {filteredFaculty.length} faculty
                                         </div>
                                         <div className="flex gap-2">
                                             <button
@@ -541,9 +557,9 @@ export default function SefPrintButtonModal({
                     </div>
                     
                     {/* Warning if no faculty have data */}
-                    {!isLoadingDetails && searchResults.length > 0 && totalWithData === 0 && (
+                    {!isLoadingDetails && facultyWithSef.length > 0 && filteredFaculty.length === 0 && (
                         <div className="mt-4 rounded-md bg-yellow-50 p-3 text-sm text-yellow-700 border border-yellow-200">
-                            No SEF data found for any faculty member in the selected school year.
+                            No faculty members match your selected filter.
                         </div>
                     )}
                 </div>

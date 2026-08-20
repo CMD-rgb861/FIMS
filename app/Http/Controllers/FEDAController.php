@@ -236,6 +236,35 @@ class FEDAController extends Controller
     }
 
     /**
+     * Remove an existing FEDA form
+     * DELETE /feda/{id_no}/{term_id}
+     */
+    public function destroy(Request $request, $idNo, $termId)
+    {
+        $user = $request->user();
+        
+        // Check if user has permission to delete FEDA form
+        if (!$this->canAccessEvaluationForUser($user)) {
+            abort(403, 'You do not have permission to delete FEDA forms.');
+        }
+
+        // Find the specific FEDA form
+        $fedaForm = FacultyDevelopmentForm::where('id_no', $idNo)
+            ->where('term_id', $termId)
+            ->firstOrFail();
+
+        try {
+            $fedaForm->delete();
+            
+            // Redirect back so Inertia reloads the page automatically
+            return redirect()->back();
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to delete FEDA form: ' . $e->getMessage());
+            return redirect()->back()->withErrors(['error' => 'Failed to remove FEDA form.']);
+        }
+    }
+
+    /**
      * Get PDF URL for FEDA form
      * GET /feda/pdf-url/{facultyId}
      */

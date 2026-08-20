@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use App\Models\User;
 use App\Models\FacultyDevelopmentForm;
+use App\Models\SupervisorEvaluationSubmission;
 use TCPDF;
 use Carbon\Carbon;
 
@@ -688,7 +689,27 @@ class BatchPDFController extends Controller
         
         // Get logged-in user for signatures
         $loggedInUser = auth()->user();
-        $preparedByName = $loggedInUser ? trim(($loggedInUser->firstname ?? '') . ' ' . ($loggedInUser->lastname ?? '')) : 'Staff';
+        $preparedByName = 'Staff';
+
+        if ($loggedInUser) {
+            $firstName = trim($loggedInUser->firstname ?? '');
+            $lastName = trim($loggedInUser->lastname ?? '');
+            $extName = trim($loggedInUser->extname ?? ''); 
+            
+            $middleName = trim($loggedInUser->middlename ?? ''); 
+            $middleInitial = '';
+            if (!empty($middleName)) {
+                $middleInitial = mb_strtoupper(mb_substr($middleName, 0, 1)) . '.';
+            }
+            
+            $nameParts = array_filter([$firstName, $middleInitial, $lastName, $extName]);
+            $preparedByName = implode(' ', $nameParts);
+            
+            if (empty($preparedByName)) {
+                $preparedByName = $loggedInUser->name ?? 'Staff';
+            }
+        }
+
         $programHeadName = $preparedByName;
         $evaluatorNameDisplay = $preparedByName;
         
@@ -719,6 +740,43 @@ class BatchPDFController extends Controller
             // Check if we have SEF data
             if (!isset($batchData[$facultyId]) || !$batchData[$facultyId]['has_sef_data']) {
                 continue;
+            }
+
+            $submission = SupervisorEvaluationSubmission::with('user')
+                ->where('instructor_id_no', $facultyId)
+                ->where('term_id', $termId)
+                ->latest('submitted_at')
+                ->first();
+
+            $actualEvaluatorName = 'Supervisor';
+            $actualEvaluatorId = '';
+            
+            if ($submission && $submission->user) {
+                $user = $submission->user;
+                
+                $firstName = trim($user->firstname ?? '');
+                $lastName = trim($user->lastname ?? '');
+                
+                // Check for extname (e.g., Jr., Sr., III) - adjust the column name if your DB uses 'extension' or 'suffix'
+                $extName = trim($user->extname ?? ''); 
+                
+                // Get the first letter of the middle name and append a period
+                $middleName = trim($user->middlename ?? ''); // adjust to 'middle_name' if that is your DB column
+                $middleInitial = '';
+                if (!empty($middleName)) {
+                    $middleInitial = mb_strtoupper(mb_substr($middleName, 0, 1)) . '.';
+                }
+                
+                // Combine the parts, filtering out any empty strings to avoid double spaces
+                $nameParts = array_filter([$firstName, $middleInitial, $lastName, $extName]);
+                $actualEvaluatorName = implode(' ', $nameParts);
+                
+                // Fallback just in case all fields are completely blank
+                if (empty($actualEvaluatorName)) {
+                    $actualEvaluatorName = $user->name ?? 'Supervisor';
+                }
+                
+                $actualEvaluatorId = $user->id_no ?? '';
             }
             
             // Get the SEF data for this faculty
@@ -772,8 +830,8 @@ class BatchPDFController extends Controller
                 'academic_year' => $termDetails['academic_year_display'],
                 'ratings' => $sefRatings,
                 'comments' => $sefComments,
-                'evaluator_name' => 'Supervisor',
-                'evaluator_id' => '',
+                'evaluator_name' => $actualEvaluatorName,
+                'evaluator_id' => $actualEvaluatorId,
                 'date' => Carbon::now()->format('F j, Y')
             ];
             
@@ -867,8 +925,8 @@ class BatchPDFController extends Controller
                     'academic_year' => $termDetails['academic_year_display'],
                     'ratings' => $sefRatings,
                     'comments' => $sefComments,
-                    'evaluator_name' => 'Supervisor',
-                    'evaluator_id' => '',
+                    'evaluator_name' => $actualEvaluatorName,
+                    'evaluator_id' => $actualEvaluatorId,
                     'date' => Carbon::now()->format('F j, Y'),
                     'development_plan' => $developmentPlan,  // ✅ Now has data
                     'program_head_name' => $programHeadName,

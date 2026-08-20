@@ -258,4 +258,117 @@ class FacultyEvaluationController extends Controller
             ],
         ]);
     }
+
+    /**
+     * Update an existing evaluation
+     */
+    public function update(Request $request, int $id): JsonResponse
+    {
+        $user = $request->user();
+        $canAccessEvaluation = method_exists($user, 'canEvaluateFaculty')
+            ? $user->canEvaluateFaculty()
+            : $user->isUnitHead();
+
+        abort_if(! $canAccessEvaluation, 403);
+
+        // Find the specific submission and ensure it belongs to the logged-in user
+        $submission = SupervisorEvaluationSubmission::where('id', $id)
+            ->where('user_id', $user->id)
+            ->firstOrFail();
+
+        $validated = $request->validate([
+            'ratings'      => ['nullable', 'array', 'min:1'],
+            'ratings.*'    => ['required_with:ratings', 'numeric', 'between:1,5'],
+            'comments'     => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $answersInput = $validated['ratings'] ?? [];
+        if (empty($answersInput)) {
+            return response()->json([
+                'message' => 'Please provide at least one rating.',
+            ], 422);
+        }
+
+        // Calculate new scores
+        $normalizedAnswers = [];
+        foreach ($answersInput as $key => $score) {
+            $normalizedAnswers[] = [
+                'question_key' => $key,
+                'score' => max(1, min(5, (int) $score)),
+            ];
+        }
+
+        $totalScore = array_sum(array_column($normalizedAnswers, 'score'));
+        $questionCount = count($normalizedAnswers);
+        $maxScore = $questionCount * 5;
+        $ratingPercentage = $maxScore > 0 ? ($totalScore / $maxScore) * 100 : 0;
+
+        DB::beginTransaction();
+
+        try {
+            // Update the main submission record
+            $submission->update([
+                'total_score'       => $totalScore,
+                'max_score'         => $maxScore,
+                'rating_percentage' => round($ratingPercentage, 2),
+                'comments'          => $validated['comments'] ?? null,
+            ]);
+
+            // Delete old answers and insert the newly edited ones
+            $submission->answers()->delete();
+            foreach ($normalizedAnswers as $answer) {
+                $submission->answers()->create([
+                    'question_key' => $answer['question_key'],
+                    'score'        => $answer['score'],
+                ]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Evaluation updated successfully.',
+                'data'    => [
+                    'id'                => $submission->id,
+                    'rating_percentage' => $submission->rating_percentage,
+                ],
+            ], 200);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Failed to update evaluation.',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Remove an existing evaluation
+     */
+    public function destroy(Request $request, int $id)
+    {
+        // Find the submission and ensure it belongs to the logged-in user
+        $submission = SupervisorEvaluationSubmission::where('id', $id)
+            ->where('user_id', $request->user()->id)
+            ->firstOrFail();
+
+        DB::beginTransaction();
+        
+        try {
+            // Delete associated answers first to prevent foreign key constraint errors
+            $submission->answers()->delete();
+            
+            // Delete the main submission
+            $submission->delete();
+            
+            DB::commit();
+            
+            // Redirect back to the page so Inertia reloads the list
+            return redirect()->back();
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->back()->withErrors(['error' => 'Failed to remove evaluation.']);
+        }
+    }
 }

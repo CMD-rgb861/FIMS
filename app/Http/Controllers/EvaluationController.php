@@ -125,7 +125,7 @@ class EvaluationController extends Controller
             }])
             ->where('user_id', $currentUser->id)
             ->where('term_id', $selectedSchoolYearId)
-            ->select(['id', 'user_id', 'instructor_id_no', 'college_id', 'unit_id', 'term_id', 'total_score', 'max_score', 'rating_percentage', 'submitted_at', 'status'])
+            ->select(['id', 'user_id', 'instructor_id_no', 'college_id', 'unit_id', 'term_id', 'total_score', 'max_score', 'rating_percentage', 'submitted_at', 'status', 'comments'])
             ->get();
 
         $evaluatedInstructors = $evaluatedSubmissions->pluck('instructor_id_no')->filter()->unique()->values()->all();
@@ -551,6 +551,7 @@ class EvaluationController extends Controller
                     'rating_percentage' => $latestEvaluation->rating_percentage,
                     'submitted_at' => $latestEvaluation->submitted_at,
                     'status' => $latestEvaluation->status,
+                    'comments' => $latestEvaluation->comments,
                 ] : null,
             ];
         }

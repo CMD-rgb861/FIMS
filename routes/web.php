@@ -43,7 +43,11 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/subjects', [SubjectsController::class, 'index'])->name('subjects');
     Route::get('/evaluation', [EvaluationController::class, 'index'])->name('evaluation');
+
     Route::post('/evaluations', [FacultyEvaluationController::class, 'store'])->name('evaluations.store');
+    Route::put('/evaluations/{id}', [FacultyEvaluationController::class, 'update']);
+    Route::delete('/evaluations/{id}', [FacultyEvaluationController::class, 'destroy']);
+
     Route::get('/grades', [GradesController::class, 'index'])->name('grades');
     Route::post('/unit-head-grades', [UnitHeadGradeController::class, 'store'])->name('unit-head-grades.store');
 
@@ -84,10 +88,11 @@ Route::middleware(['auth'])->group(function () {
     
     // Save FEDA form data to the database
     Route::post('/feda/save', [FEDAController::class, 'save'])->name('feda.save');
+    Route::delete('/feda/{id_no}/{term_id}', [FedaController::class, 'destroy']);
     
     // Get FEDA PDF URL (NEW)
     Route::get('/feda/pdf-url/{facultyId}', [FEDAController::class, 'getPdfUrl'])->name('feda.pdf-url');
-    Route::post('/feda/pdf/generate', [BatchPDFController::class, 'generateFEDA'])->name('feda.pdf.generate');//Batch print
+    Route::post('/feda/pdf/generate', [BatchPDFController::class, 'generateFEDA'])->name('feda.pdf.generate');
     
     // FEDA PDF Generation
     Route::get('/forms/faculty-evaluation-development-acknowledgment-pdf/{id}', [FacultyEvaluationDevelopmentAcknowledgmentPDF::class, 'generate'])->name('feda.form.pdf');

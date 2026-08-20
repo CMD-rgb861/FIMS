@@ -5,7 +5,9 @@ import EvaluationResultModal from '../modals/EvaluationResultModal';
 import FEDAFormModal from '../modals/FEDAFormModal';
 import {router, Link} from '@inertiajs/react';
 import FEDAResultModal from '../modals/FEDAResultModal';
+import ConfirmDeleteModal from '../modals/ConfirmDeleteModal';
 import { isAdminRole } from '../utils/role';
+import { toast } from 'react-toastify';
 
 export default function EvaluationPage({
     appName = 'FIMS',
@@ -55,7 +57,8 @@ export default function EvaluationPage({
     const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery || '');
     const [localCurrentPage, setLocalCurrentPage] = useState(currentPage || 1);
     const [isLoading, setIsLoading] = useState(false);
-    
+    const [openingAction, setOpeningAction] = useState(null);
+
     const searchTimeoutRef = useRef(null);
     const filterTimeoutRef = useRef(null);
     const isFirstRender = useRef(true);
@@ -223,12 +226,20 @@ export default function EvaluationPage({
 
     const openEvaluationModal = (item) => {
         if (item.evaluated || isEvaluationClosed) return;
-        setSelectedEvaluation({
-            ...item,
-            term_id: item.school_year_id || parseInt(localSchoolYear, 10),
-            school_year_id: item.school_year_id || parseInt(localSchoolYear, 10),
-        });
-        setIsEvaluationOpen(true);
+        
+        // 1. Show the loading spinner on this specific button
+        setOpeningAction(`sef-${item.id_no}`);
+        
+        // 2. Add a tiny delay so the UI updates before the heavy modal blocks the thread
+        setTimeout(() => {
+            setSelectedEvaluation({
+                ...item,
+                term_id: item.school_year_id || parseInt(localSchoolYear, 10),
+                school_year_id: item.school_year_id || parseInt(localSchoolYear, 10),
+            });
+            setIsEvaluationOpen(true);
+            setOpeningAction(null); // Remove loading state
+        }, 50);
     };
 
     const closeEvaluationModal = () => {
@@ -247,15 +258,93 @@ export default function EvaluationPage({
         setIsResultOpen(false);
     };
 
-    const openFedaModal = (item) => {
-        const isFedaSubmitted = item.feda_submitted || false;
-        setSelectedFedaFaculty({
-            ...item,
-            name: item.instructor,
-            id_no: item.id_no || item.instructor_id_no,
-            is_view_mode: isFedaSubmitted,
+    const openEditModal = (item) => {
+        setSelectedEvaluation(item);
+        setIsEvaluationOpen(true);
+    };
+
+    const openFedaModal = (item, isView = true) => {
+        setOpeningAction(`feda-${item.id_no}`);
+        
+        setTimeout(() => {
+            setSelectedFedaFaculty({
+                ...item,
+                name: item.instructor,
+                id_no: item.id_no || item.instructor_id_no,
+                is_view_mode: isView,
+            });
+            setIsFedaModalOpen(true);
+            setOpeningAction(null);
+        }, 50);
+    };
+
+    const [deleteConfig, setDeleteConfig] = useState({
+        isOpen: false,
+        type: '', // 'sef' or 'feda'
+        item: null,
+        title: '',
+        message: ''
+    });
+    const [isDeleting, setIsDeleting] = useState(false);     
+
+    const openDeleteSefModal = (item) => {
+        setDeleteConfig({
+            isOpen: true,
+            type: 'sef',
+            item: item,
+            title: 'Remove SEF Evaluation',
+            message: `Are you sure you want to remove the SEF evaluation for ${item.instructor}? This will permanently delete the scores and comments.`
         });
-        setIsFedaModalOpen(true);
+    };
+
+    const openDeleteFedaModal = (item) => {
+        setDeleteConfig({
+            isOpen: true,
+            type: 'feda',
+            item: item,
+            title: 'Remove FEDA Form',
+            message: `Are you sure you want to remove the FEDA form for ${item.instructor}? This will permanently delete their development plan.`
+        });
+    };
+
+    const closeDeleteModal = () => {
+        if (isDeleting) return;
+        setDeleteConfig({ ...deleteConfig, isOpen: false });
+    };
+
+    const executeDelete = async () => {
+        setIsDeleting(true);
+        const { type, item } = deleteConfig;
+
+        try {
+            if (type === 'sef') {
+                router.delete(`/evaluations/${item.evaluation_result.id}`, {
+                    preserveScroll: true,
+                    preserveState: true,
+                    onSuccess: () => {
+                        toast.success('SEF Evaluation removed successfully');
+                        closeDeleteModal();
+                    },
+                    onFinish: () => setIsDeleting(false)
+                });
+            } else if (type === 'feda') {
+                const idNo = item.id_no || item.instructor_id_no;
+                const termId = item.school_year_id || localSchoolYear;
+                
+                router.delete(`/feda/${idNo}/${termId}`, {
+                    preserveScroll: true,
+                    preserveState: true,
+                    onSuccess: () => {
+                        toast.success('FEDA form removed successfully');
+                        closeDeleteModal();
+                    },
+                    onFinish: () => setIsDeleting(false)
+                });
+            }
+        } catch (error) {
+            toast.error('An error occurred during deletion.');
+            setIsDeleting(false);
+        }
     };
 
     const closeFedaModal = () => {
@@ -263,8 +352,8 @@ export default function EvaluationPage({
         setIsFedaModalOpen(false);
     };
 
-    const handleEvaluationSubmitted = ({ instructor, evaluation_result: evaluationResult }) => {
-        window.location.reload();
+    const handleEvaluationSubmitted = () => {
+        router.reload({ preserveScroll: true, preserveState: true });
     };
 
     const hasEvaluationItems = evaluations && evaluations.length > 0;
@@ -618,49 +707,125 @@ export default function EvaluationPage({
                                                     </div>
                                                 </div>
 
-                                                <div className="mt-4 flex flex-wrap items-center gap-2">
-                                                    {item.evaluated ? (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => openResultModal(item)}
-                                                            className="inline-flex cursor-pointer items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
-                                                        >
-                                                            View Evaluation
-                                                        </button>
-                                                    ) : isEvaluationClosed ? (
-                                                        <button
-                                                            type="button"
-                                                            disabled
-                                                            className="inline-flex items-center rounded-md bg-slate-300 px-3 py-2 text-xs font-semibold text-slate-600 cursor-not-allowed"
-                                                        >
-                                                            Evaluation Closed
-                                                        </button>
-                                                    ) : (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => openEvaluationModal(item)}
-                                                            className="inline-flex cursor-pointer items-center rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"
-                                                        >
-                                                            Evaluate SEF
-                                                        </button>
-                                                    )}
-                                                    
-                                                    {(() => {
-                                                        const isFedaSubmitted = item.feda_submitted || false;
-                                                        return (
+                                                <div className="mt-4 flex flex-wrap items-center gap-4 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+    
+                                                    {/* --- SEF ACTIONS --- */}
+                                                    <div className="flex items-center gap-2 border-r border-slate-200 pr-4">
+                                                        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">SEF:</span>
+                                                        {item.evaluated ? (
+                                                            <div className="flex items-center gap-1.5">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => openResultModal(item)}
+                                                                    title="View SEF"
+                                                                    className="p-1.5 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 rounded-md transition-colors"
+                                                                >
+                                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                                    </svg>
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => openEditModal(item)}
+                                                                    title="Edit SEF"
+                                                                    className="p-1.5 text-blue-600 hover:bg-blue-100 hover:text-blue-700 rounded-md transition-colors"
+                                                                >
+                                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                                                    </svg>
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => openDeleteSefModal(item)}
+                                                                    title="Remove SEF"
+                                                                    className="p-1.5 text-red-500 hover:bg-red-100 hover:text-red-700 rounded-md transition-colors"
+                                                                >
+                                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                                    </svg>
+                                                                </button>
+                                                            </div>
+                                                        ) : isEvaluationClosed ? (
+                                                            <span className="text-xs font-medium text-slate-400 italic">Closed</span>
+                                                        ) : (
                                                             <button
                                                                 type="button"
-                                                                onClick={() => openFedaModal(item)}
-                                                                className={`inline-flex cursor-pointer items-center rounded-md px-3 py-2 text-xs font-semibold ${
-                                                                    isFedaSubmitted 
-                                                                        ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                                                                        : 'bg-blue-600 text-white hover:bg-blue-700'
-                                                                }`}
+                                                                onClick={() => openEvaluationModal(item)}
+                                                                title="Evaluate SEF"
+                                                                disabled={openingAction === `sef-${item.id_no}`}
+                                                                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-blue-600 bg-blue-100/50 hover:bg-blue-100 rounded-md transition-colors disabled:opacity-50 disabled:cursor-wait"
                                                             >
-                                                                {isFedaSubmitted ? 'View FEDA Form' : 'Open FEDA Form'}
+                                                                {openingAction === `sef-${item.id_no}` ? (
+                                                                    <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                                    </svg>
+                                                                ) : (
+                                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                                    </svg>
+                                                                )}
+                                                                {openingAction === `sef-${item.id_no}` ? 'Loading...' : 'Evaluate'}
                                                             </button>
-                                                        );
-                                                    })()}
+                                                        )}
+                                                    </div>
+                                                    
+                                                    {/* --- FEDA ACTIONS --- */}
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">FEDA:</span>
+                                                        {(() => {
+                                                            const isFedaSubmitted = item.feda_submitted || false;
+                                                            
+                                                            return isFedaSubmitted ? (
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => openFedaModal(item, true)} // View Mode
+                                                                        title="View FEDA"
+                                                                        className="p-1.5 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 rounded-md transition-colors"
+                                                                    >
+                                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                                        </svg>
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => openFedaModal(item, false)} // Edit Mode
+                                                                        title="Edit FEDA"
+                                                                        className="p-1.5 text-blue-600 hover:bg-blue-100 hover:text-blue-700 rounded-md transition-colors"
+                                                                    >
+                                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                                                        </svg>
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => openDeleteFedaModal(item)}
+                                                                        title="Remove FEDA"
+                                                                        className="p-1.5 text-red-500 hover:bg-red-100 hover:text-red-700 rounded-md transition-colors"
+                                                                    >
+                                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                                        </svg>
+                                                                    </button>
+                                                                </div>
+                                                            ) : (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => openFedaModal(item, false)} // Create Mode
+                                                                    title="Create FEDA"
+                                                                    className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-blue-600 bg-blue-100/50 hover:bg-blue-100 rounded-md transition-colors"
+                                                                >
+                                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                                    </svg>
+                                                                    Create
+                                                                </button>
+                                                            );
+                                                        })()}
+                                                    </div>
                                                 </div>
                                             </div>
                                         ))}
@@ -708,13 +873,22 @@ export default function EvaluationPage({
                     <FEDAFormModal
                         isOpen={isFedaModalOpen}
                         onClose={closeFedaModal}
-                        onSubmitted={() => window.location.reload()}
+                        onSubmitted={() => router.reload({ preserveScroll: true, preserveState: true })}
                         faculty={selectedFedaFaculty}
                         termId={localSchoolYear}
                         termLabel={selectedFedaFaculty?.term || schoolYears.find((option) => option.value === localSchoolYear)?.label || localSchoolYear}
                         isViewMode={selectedFedaFaculty?.is_view_mode || false}
                     />
                 )}
+
+                <ConfirmDeleteModal
+                    isOpen={deleteConfig.isOpen}
+                    onClose={closeDeleteModal}
+                    onConfirm={executeDelete}
+                    title={deleteConfig.title}
+                    message={deleteConfig.message}
+                    isDeleting={isDeleting}
+                />
             </main>
         </AppLayout>
     );

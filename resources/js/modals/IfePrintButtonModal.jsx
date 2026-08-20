@@ -4,9 +4,6 @@ import { toast } from 'react-toastify';
 
 // Memoized row component to prevent re-renders
 const FacultyRow = React.memo(({ faculty, isSelected, onToggle, isLoadingDetails }) => {
-    // Use the backend's has_complete_data flag
-    const isSelectable = faculty.has_complete_data === true;
-    
     return (
         <tr className="hover:bg-slate-50">
             <td className="px-4 py-3">
@@ -14,7 +11,7 @@ const FacultyRow = React.memo(({ faculty, isSelected, onToggle, isLoadingDetails
                     type="checkbox"
                     checked={isSelected}
                     onChange={() => onToggle(faculty.employee_id_no)}
-                    disabled={isLoadingDetails || !isSelectable}
+                    disabled={isLoadingDetails} // REMOVED the restriction here
                     className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
                 />
             </td>
@@ -56,6 +53,7 @@ export default function IfePrintButtonModal({
 }) {
     const [selectedFaculty, setSelectedFaculty] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
+    const [filterStatus, setFilterStatus] = useState('all'); // Added filter state
     const [isSearching, setIsSearching] = useState(false);
     const [searchResults, setSearchResults] = useState([]);
     const effectiveFacultyList = useMemo(
@@ -118,7 +116,7 @@ export default function IfePrintButtonModal({
                     comments: data.comments || '',
                     has_sef_data: data.has_sef_data || false,
                     has_set_data: data.has_set_data || false,
-                    has_complete_data: data.has_complete_data || false, // Use backend flag
+                    has_complete_data: data.has_complete_data || false,
                     total_evaluators: data.total_evaluators || 0,
                     error: data.error || null
                 };
@@ -225,6 +223,7 @@ export default function IfePrintButtonModal({
             setIsGenerating(false);
             setCurrentPage(1);
             setSearchQuery('');
+            setFilterStatus('all'); // Reset filter
             setSearchResults([]);
             if (searchTimeoutRef.current) {
                 clearTimeout(searchTimeoutRef.current);
@@ -241,6 +240,15 @@ export default function IfePrintButtonModal({
         };
     }, []);
 
+    // Filter faculty based on Dropdown Status and Search Results
+    const filteredFaculty = useMemo(() => {
+        return searchResults.filter(faculty => {
+            if (filterStatus === 'complete') return faculty.has_complete_data === true;
+            if (filterStatus === 'incomplete') return faculty.has_complete_data !== true;
+            return true; // 'all'
+        });
+    }, [searchResults, filterStatus]);
+
     const handleFacultyToggle = useCallback((facultyId) => {
         setSelectedFaculty(prev => 
             prev.includes(facultyId)
@@ -250,14 +258,12 @@ export default function IfePrintButtonModal({
     }, []);
 
     const handleSelectAll = useCallback(() => {
-        // Only select faculty that have complete data (both SET and SEF)
-        const facultyWithCompleteData = searchResults.filter(f => f.has_complete_data === true);
         setSelectedFaculty(prev => 
-            prev.length === facultyWithCompleteData.length 
+            prev.length === filteredFaculty.length && filteredFaculty.length > 0
                 ? [] 
-                : facultyWithCompleteData.map(f => f.employee_id_no)
+                : filteredFaculty.map(f => f.employee_id_no)
         );
-    }, [searchResults]);
+    }, [filteredFaculty]);
 
     const handleGeneratePDF = useCallback(async () => {
         if (selectedFaculty.length === 0) {
@@ -333,20 +339,14 @@ export default function IfePrintButtonModal({
         }
     }, [selectedFaculty, facultyWithSef, selectedSchoolYear, schoolYearLabel, onClose]);
 
-    // Memoized computed values - only faculty with complete data
-    const facultyWithData = useMemo(() => 
-        searchResults.filter(f => f.has_complete_data === true), 
-        [searchResults]
-    );
-    
     const selectedCount = selectedFaculty.length;
-    const totalWithData = facultyWithData.length;
+    const totalFiltered = filteredFaculty.length;
     
     // Pagination
-    const totalPages = Math.ceil(searchResults.length / itemsPerPage);
+    const totalPages = Math.max(1, Math.ceil(filteredFaculty.length / itemsPerPage));
     const indexOfLastItem = currentPage * itemsPerPage;
     const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-    const currentFaculty = searchResults.slice(indexOfFirstItem, indexOfLastItem);
+    const currentFaculty = filteredFaculty.slice(indexOfFirstItem, indexOfLastItem);
     
     const handlePageChange = useCallback((pageNumber) => {
         setCurrentPage(pageNumber);
@@ -401,15 +401,15 @@ export default function IfePrintButtonModal({
                                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                 </svg>
-                                Loading SEF data for faculty...
+                                Loading faculty data...
                             </div>
                         </div>
                     )}
 
-                    {/* Search Bar */}
+                    {/* Search and Filter Bar */}
                     {!isLoadingDetails && facultyWithSef.length > 0 && (
-                        <div className="mb-4">
-                            <div className="relative">
+                        <div className="mb-4 flex flex-col sm:flex-row gap-3">
+                            <div className="relative flex-1">
                                 <input
                                     type="text"
                                     placeholder="Search faculty by name or ID..."
@@ -429,25 +429,36 @@ export default function IfePrintButtonModal({
                                     </div>
                                 )}
                             </div>
-                            {searchQuery && (
-                                <div className="mt-1 text-xs text-slate-500">
-                                    Found {searchResults.length} result(s)
-                                </div>
-                            )}
+
+                            {/* Status Filter Dropdown */}
+                            <div className="w-full sm:w-56">
+                                <select
+                                    value={filterStatus}
+                                    onChange={(e) => {
+                                        setFilterStatus(e.target.value);
+                                        setCurrentPage(1);
+                                    }}
+                                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                                >
+                                    <option value="all">All Faculty</option>
+                                    <option value="complete">Complete Data (SET & SEF)</option>
+                                    <option value="incomplete">Incomplete Data</option>
+                                </select>
+                            </div>
                         </div>
                     )}
 
                     {/* Select All Button */}
-                    {!isLoadingDetails && facultyWithData.length > 0 && (
+                    {!isLoadingDetails && filteredFaculty.length > 0 && (
                         <div className="mb-4 flex items-center justify-between">
                             <button
                                 onClick={handleSelectAll}
                                 className="text-sm text-blue-600 hover:text-blue-700 font-medium"
                             >
-                                {selectedCount === totalWithData ? 'Deselect All' : 'Select All'}
+                                {selectedCount === totalFiltered && totalFiltered > 0 ? 'Deselect All' : 'Select All'}
                             </button>
                             <span className="text-xs text-slate-500">
-                                {selectedCount} of {totalWithData} selected
+                                {selectedCount} of {totalFiltered} selected
                             </span>
                         </div>
                     )}
@@ -457,9 +468,9 @@ export default function IfePrintButtonModal({
                         id="faculty-table-container"
                         className="border border-slate-200 rounded-lg overflow-hidden"
                     >
-                        {searchResults.length === 0 ? (
+                        {filteredFaculty.length === 0 ? (
                             <div className="p-8 text-center text-slate-500">
-                                {searchQuery ? 'No faculty members match your search.' : 'No faculty members available.'}
+                                {searchQuery || filterStatus !== 'all' ? 'No faculty members match your filters.' : 'No faculty members available.'}
                             </div>
                         ) : (
                             <>
@@ -470,7 +481,7 @@ export default function IfePrintButtonModal({
                                                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 w-12">
                                                     <input
                                                         type="checkbox"
-                                                        checked={selectedCount === totalWithData && totalWithData > 0}
+                                                        checked={selectedCount === totalFiltered && totalFiltered > 0}
                                                         onChange={handleSelectAll}
                                                         disabled={isLoadingDetails}
                                                         className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
@@ -500,7 +511,7 @@ export default function IfePrintButtonModal({
                                 {totalPages > 1 && (
                                     <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3">
                                         <div className="text-sm text-slate-700">
-                                            Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, searchResults.length)} of {searchResults.length} faculty
+                                            Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredFaculty.length)} of {filteredFaculty.length} faculty
                                         </div>
                                         <div className="flex gap-2">
                                             <button
@@ -562,24 +573,6 @@ export default function IfePrintButtonModal({
                             </>
                         )}
                     </div>
-                    
-                    {/* Warning if no faculty have complete data */}
-                    {!isLoadingDetails && searchResults.length > 0 && totalWithData === 0 && (
-                        <div className="mt-4 rounded-md bg-yellow-50 p-3 text-sm text-yellow-700 border border-yellow-200">
-                            No faculty members have complete SET and SEF data for the selected school year. 
-                            Both SET and SEF data are required to generate IFE reports.
-                        </div>
-                    )}
-                    
-                    {/* Show counts of incomplete data */}
-                    {!isLoadingDetails && searchResults.length > 0 && totalWithData > 0 && totalWithData < searchResults.length && (
-                        <div className="mt-4 rounded-md bg-blue-50 p-3 text-sm text-blue-700 border border-blue-200">
-                            {searchResults.length - totalWithData} faculty member(s) are not selectable because they are missing 
-                            {searchResults.some(f => !f.has_set_data) ? ' SET' : ''}
-                            {searchResults.some(f => !f.has_set_data) && searchResults.some(f => !f.has_sef_data) ? ' and/or' : ''}
-                            {searchResults.some(f => !f.has_sef_data) ? ' SEF' : ''} data.
-                        </div>
-                    )}
                 </div>
 
                 {/* Footer */}

@@ -534,11 +534,16 @@ class ReportsController extends Controller
             ->all();
 
         // Calculate overall SET rating using the same method as ReportsPage
-        $overallSetRating = $this->getFacultyOverallSetRating(
-            $facultyMeta['id_no'] ?? null,
-            $facultyMeta['instructor'] ?? null,
-            $selectedSchoolYear
-        );
+        // $overallSetRating = $this->getFacultyOverallSetRating(
+        //     $facultyMeta['id_no'] ?? null,
+        //     $facultyMeta['instructor'] ?? null,
+        //     $selectedSchoolYear
+        // );
+
+        $overallSetRating = null;
+        if (isset($latestGradesByCourse) && $latestGradesByCourse->isNotEmpty()) {
+            $overallSetRating = round($latestGradesByCourse->avg('grade'), 2);
+        }
 
         // Calculate overall SEF rating for this faculty
         $overallSefRating = null;
@@ -817,7 +822,7 @@ class ReportsController extends Controller
     }
 
     private function getFacultyOverallSetRating(?string $idNo, ?string $instructor = null, ?int $termId = null): ?float
-        {
+    {
             $normalizedIdNo = trim((string) ($idNo ?? ''));
             $normalizedInstructor = trim((string) ($instructor ?? ''));
 
@@ -887,7 +892,7 @@ class ReportsController extends Controller
             $cache[$cacheKey] = $overallRating;
 
             return $overallRating;
-        }
+    }
 
     private function getUserSefAverageRating(int $userId, ?int $termId = null): float
         {

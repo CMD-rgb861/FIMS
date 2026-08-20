@@ -87,7 +87,7 @@ export default function FEDAFormModal({
                         proposed_activities: data.development_plan.proposed_activities || '',
                         action_plan: data.development_plan.action_plan || ''
                     });
-                    setIsSubmitted(data.development_plan.is_submitted || false);
+                    setIsSubmitted(isViewMode ? (data.development_plan.is_submitted || false) : false);
                 }
             } else {
                 setFormData(getInitialFormState());

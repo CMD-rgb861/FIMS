@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'react-toastify';
 
 export default function SefEvaluationModal({ isOpen, evaluation, submitUrl = '/evaluations', csrfToken = '', onClose, onSubmitted }) {
@@ -129,6 +129,25 @@ export default function SefEvaluationModal({ isOpen, evaluation, submitUrl = '/e
         },
     ]), []);
 
+    useEffect(() => {
+        if (isOpen && evaluation?.evaluation_result) {
+            // Pre-fill existing ratings
+            const initialRatings = {};
+            evaluation.evaluation_result.scores.forEach(s => {
+                initialRatings[s.benchmark] = s.score;
+            });
+            setRatings(initialRatings);
+            
+            // Pre-fill comments
+            setComments(evaluation.evaluation_result.comments || '');
+        } else if (isOpen) {
+            // Reset if it's a new evaluation
+            setRatings({});
+            setComments('');
+        }
+        setCurrentStep(1);
+    }, [isOpen, evaluation]);
+
     const currentSection = currentStep <= 3 ? benchmarkSections[currentStep - 1] : null;
     const currentSectionItems = currentSection?.items ?? [];
     const totalItems = currentSectionItems.length;
@@ -186,8 +205,13 @@ export default function SefEvaluationModal({ isOpen, evaluation, submitUrl = '/e
         });
 
         try {
-            const response = await fetch(submitUrl, {
-                method: 'POST',
+
+            const isEdit = !!evaluation.evaluation_result;
+            const method = isEdit ? 'PUT' : 'POST';
+            const fetchUrl = isEdit ? `${submitUrl}/${evaluation.evaluation_result.id}` : submitUrl;
+
+            const response = await fetch(fetchUrl, {
+                method: method,
                 headers: {
                     'Content-Type': 'application/json',
                     Accept: 'application/json',
