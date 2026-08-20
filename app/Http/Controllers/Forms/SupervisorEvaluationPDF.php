@@ -976,8 +976,8 @@ class SupervisorEvaluationPDF extends Controller
         $pdf->Cell($label_width, $sig_row_height, 'Date', 0, 0, 'L');
         $pdf->SetFont('times', '', $body_font_size);
         $pdf->Cell(3, $sig_row_height, ':', 0, 0, 'R');
-        $pdf->Cell($line_width - 3, $sig_row_height, ' ' . $data['date'], 'B', 1);
-        
+        //$pdf->Cell($line_width - 3, $sig_row_height, ' ' . $data['date'], 'B', 1);
+        $pdf->Cell($line_width - 3, $sig_row_height, ' ', 'B', 1);
         $pdf->Ln(2);
     }
     

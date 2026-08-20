@@ -1006,7 +1006,8 @@ class BatchPDFController extends Controller
         $pdf->Cell(40, 6, 'Faculty: ' . $data['faculty_name'], 0, 1);
         $pdf->Cell(40, 6, 'College/Department: ' . $data['college'], 0, 1);
         $pdf->Cell(40, 6, 'Evaluator: ' . $data['evaluator_name'] . ' (' . $data['evaluator_id'] . ')', 0, 1);
-        $pdf->Cell(40, 6, 'Date: ' . $data['date'], 0, 1);
+        //$pdf->Cell(40, 6, 'Date: ' . $data['date'], 0, 1);
+        $pdf->Cell(40, 6, 'Date: ', 0, 1);
         $pdf->Ln(5);
         
         // Ratings table
@@ -1060,7 +1061,8 @@ class BatchPDFController extends Controller
         $pdf->Cell(40, 6, 'Faculty: ' . $data['faculty_name'], 0, 1);
         $pdf->Cell(40, 6, 'College/Department: ' . $data['college'], 0, 1);
         $pdf->Cell(40, 6, 'Academic Rank: ' . $data['academic_rank'], 0, 1);
-        $pdf->Cell(40, 6, 'Date: ' . $data['date'], 0, 1);
+        //$pdf->Cell(40, 6, 'Date: ' . $data['date'], 0, 1);
+        $pdf->Cell(40, 6, 'Date: ', 0, 1);
         $pdf->Ln(5);
         
         // SET Rating Summary
@@ -1117,7 +1119,8 @@ class BatchPDFController extends Controller
         $pdf->Ln(5);
         $pdf->SetFont('times', 'B', 10);
         $pdf->Cell(0, 6, 'Prepared by: ' . $data['prepared_by'], 0, 1);
-        $pdf->Cell(0, 6, 'Date: ' . $data['date'], 0, 1);
+        //$pdf->Cell(0, 6, 'Date: ' . $data['date'], 0, 1);
+        $pdf->Cell(0, 6, 'Date: ', 0, 1);
     }
 
     /**
@@ -1136,7 +1139,8 @@ class BatchPDFController extends Controller
         $pdf->Cell(40, 6, 'Faculty: ' . $data['faculty_name'], 0, 1);
         $pdf->Cell(40, 6, 'College/Department: ' . $data['college'], 0, 1);
         $pdf->Cell(40, 6, 'Academic Rank: ' . $data['academic_rank'], 0, 1);
-        $pdf->Cell(40, 6, 'Date: ' . $data['date'], 0, 1);
+        //$pdf->Cell(40, 6, 'Date: ' . $data['date'], 0, 1);
+        $pdf->Cell(40, 6, 'Date: ', 0, 1);
         $pdf->Ln(5);
         
         // Evaluation Summary
@@ -1763,8 +1767,8 @@ class BatchPDFController extends Controller
         $pdf->Cell($label_width, $sig_row_height, 'Date', 0, 0, 'L');
         $pdf->SetFont('times', '', $body_font_size);
         $pdf->Cell(3, $sig_row_height, ':', 0, 0, 'R');
-        $pdf->Cell($line_width - 3, $sig_row_height, ' ' . $data['date'], 'B', 1);
-        
+        //$pdf->Cell($line_width - 3, $sig_row_height, ' ' . $data['date'], 'B', 1);
+        $pdf->Cell($line_width - 3, $sig_row_height, ' ', 'B', 1);
         $pdf->Ln(2);
     }
     
